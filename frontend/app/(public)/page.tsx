@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
 
 type IconName =
   | "arrow"
@@ -25,7 +26,8 @@ type IconName =
   | "star"
   | "sun"
   | "truck"
-  | "upload";
+  | "upload"
+  | "user";
 
 type Cake = {
   id: number;
@@ -44,7 +46,51 @@ type Cake = {
   shapes: string[];
 };
 
+type CartItem = {
+  id: string;
+  cake: Cake;
+  quantity: number;
+  size: string;
+  flavor: string;
+  shape: string;
+  theme: string;
+  message: string;
+  toppings: string[];
+  withCandles: boolean;
+  withCard: boolean;
+};
+
+type CustomerDetails = {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  notes: string;
+};
+
+type OrderDetails = {
+  number: string;
+  statusIndex: number;
+  method: "delivery" | "pickup";
+  dateLabel: string;
+};
+
 const imageBase = "https://images.unsplash.com/";
+
+const orderStatuses: { label: string; note: string; icon: IconName }[] = [
+  { label: "Order received", note: "Your order is confirmed", icon: "check" },
+  { label: "Baking", note: "Freshly made in our studio", icon: "cake" },
+  { label: "Decorating", note: "Adding the finishing touches", icon: "sparkle" },
+  { label: "Out for delivery", note: "Carefully on its way to you", icon: "truck" },
+  { label: "Delivered", note: "Time to celebrate", icon: "heart" },
+];
+
+const faqItems = [
+  { question: "How far ahead should I order?", answer: "For custom designs, 3–5 days is best. A selection of cakes is available for next-day order." },
+  { question: "Do you cater for dietary needs?", answer: "Yes. We have vegan and eggless choices, and can advise on ingredients before you order." },
+  { question: "Can I change my delivery time?", answer: "Message us on WhatsApp as soon as you can. We will always try to make it work." },
+  { question: "What areas do you deliver to?", answer: "We deliver across Nairobi, including Kilimani, Westlands, Karen, Lavington, Runda and nearby areas." },
+];
 
 const cakes: Cake[] = [
   {
@@ -293,6 +339,7 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
     sun: <><circle cx="12" cy="12" r="3.5" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,
     truck: <><path d="M3 6h11v10H3z" /><path d="M14 10h4l3 3v3h-7z" /><circle cx="7" cy="18" r="1.7" /><circle cx="18" cy="18" r="1.7" /></>,
     upload: <><path d="M12 16V4" /><path d="m7 9 5-5 5 5" /><path d="M5 20h14" /></>,
+    user: <><circle cx="12" cy="8" r="3.5" /><path d="M5 20c.7-3.4 3-5 7-5s6.3 1.6 7 5" /></>,
   };
 
   return <svg {...common}>{paths[name]}</svg>;
@@ -300,6 +347,15 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
 
 function formatPrice(amount: number) {
   return `KSh ${amount.toLocaleString("en-KE")}`;
+}
+
+function getCustomizedPrice(cake: Cake, size: string, toppings: string[], withCandles: boolean, withCard: boolean) {
+  return Math.round(
+    cake.price * (size === "0.5 kg" ? 0.65 : size === "2 kg" ? 1.8 : 1) +
+      (withCandles ? 250 : 0) +
+      (withCard ? 350 : 0) +
+      toppings.length * 180,
+  );
 }
 
 export default function HomePage() {
@@ -311,7 +367,26 @@ export default function HomePage() {
   const [selectedCake, setSelectedCake] = useState<Cake | null>(null);
   const [activeImage, setActiveImage] = useState(0);
   const [likedCakes, setLikedCakes] = useState<number[]>([]);
-  const [cartCount, setCartCount] = useState(0);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [savedItems, setSavedItems] = useState<CartItem[]>([]);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutStep, setCheckoutStep] = useState<"details" | "review">("details");
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [signedIn, setSignedIn] = useState(false);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState("");
+  const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("delivery");
+  const [scheduleMode, setScheduleMode] = useState<"next" | "schedule">("next");
+  const [orderDate, setOrderDate] = useState("");
+  const [orderTime, setOrderTime] = useState("10:00am – 12:00pm");
+  const [customer, setCustomer] = useState<CustomerDetails>({ name: "", phone: "", email: "", address: "", notes: "" });
+  const [order, setOrder] = useState<OrderDetails | null>(null);
+  const [faqOpen, setFaqOpen] = useState<number | null>(0);
+  const [contactMessage, setContactMessage] = useState("");
   const [toast, setToast] = useState("");
   const [selectedSize, setSelectedSize] = useState("1 kg");
   const [selectedFlavor, setSelectedFlavor] = useState("Vanilla berry");
@@ -322,6 +397,7 @@ export default function HomePage() {
   const [withCandles, setWithCandles] = useState(false);
   const [withCard, setWithCard] = useState(false);
   const [uploadName, setUploadName] = useState("");
+  const cartCount = cartItems.reduce((count, item) => count + item.quantity, 0);
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("bite-bloom-theme");
@@ -337,11 +413,11 @@ export default function HomePage() {
   }, [darkMode]);
 
   useEffect(() => {
-    document.body.style.overflow = selectedCake ? "hidden" : "";
+    document.body.style.overflow = selectedCake || cartOpen || checkoutOpen || accountOpen ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
-  }, [selectedCake]);
+  }, [selectedCake, cartOpen, checkoutOpen, accountOpen]);
 
   const filteredCakes = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -359,14 +435,14 @@ export default function HomePage() {
     });
   }, [activeCategory, search, sortBy]);
 
-  const customizationPrice = selectedCake
-    ? Math.round(
-        selectedCake.price * (selectedSize === "0.5 kg" ? 0.65 : selectedSize === "2 kg" ? 1.8 : 1) +
-          (withCandles ? 250 : 0) +
-          (withCard ? 350 : 0) +
-          toppings.length * 180,
-      )
-    : 0;
+  const customizationPrice = selectedCake ? getCustomizedPrice(selectedCake, selectedSize, toppings, withCandles, withCard) : 0;
+  const cartSubtotal = cartItems.reduce(
+    (total, item) => total + getCustomizedPrice(item.cake, item.size, item.toppings, item.withCandles, item.withCard) * item.quantity,
+    0,
+  );
+  const couponDiscount = appliedCoupon === "SWEET10" ? Math.round(cartSubtotal * 0.1) : appliedCoupon === "BLOOM500" ? 500 : 0;
+  const deliveryFee = deliveryMethod === "delivery" && cartItems.length ? (cartSubtotal >= 6000 ? 0 : 350) : 0;
+  const cartTotal = Math.max(0, cartSubtotal + deliveryFee - couponDiscount);
 
   function toggleDarkMode() {
     setDarkMode((current) => !current);
@@ -393,9 +469,109 @@ export default function HomePage() {
 
   function addToCart() {
     if (!selectedCake) return;
-    setCartCount((count) => count + 1);
+    const newItem: CartItem = {
+      id: `${selectedCake.id}-${Date.now()}`,
+      cake: selectedCake,
+      quantity: 1,
+      size: selectedSize,
+      flavor: selectedFlavor,
+      shape: selectedShape,
+      theme,
+      message,
+      toppings,
+      withCandles,
+      withCard,
+    };
+    setCartItems((items) => [...items, newItem]);
     setSelectedCake(null);
+    setCartOpen(true);
     showToast(`${selectedCake.name} is in your cart`);
+  }
+
+  function updateQuantity(id: string, change: number) {
+    setCartItems((items) => items.map((item) => item.id === id ? { ...item, quantity: Math.max(1, item.quantity + change) } : item));
+  }
+
+  function removeCartItem(id: string) {
+    setCartItems((items) => items.filter((item) => item.id !== id));
+    showToast("Item removed from your cart");
+  }
+
+  function saveCartItem(item: CartItem) {
+    setSavedItems((items) => [...items, item]);
+    setCartItems((items) => items.filter((current) => current.id !== item.id));
+    showToast(`${item.cake.name} saved for later`);
+  }
+
+  function moveSavedToCart(item: CartItem) {
+    setCartItems((items) => [...items, item]);
+    setSavedItems((items) => items.filter((current) => current.id !== item.id));
+    showToast(`${item.cake.name} moved back to your cart`);
+  }
+
+  function applyCoupon(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const code = couponCode.trim().toUpperCase();
+    if (code === "SWEET10" || code === "BLOOM500") {
+      setAppliedCoupon(code);
+      showToast(`${code} applied — a little more joy for less`);
+    } else {
+      setAppliedCoupon("");
+      showToast("Try SWEET10 or BLOOM500 for a welcome treat");
+    }
+  }
+
+  function openCheckout() {
+    if (!cartItems.length) {
+      showToast("Add a cake before checking out");
+      return;
+    }
+    setCartOpen(false);
+    setCheckoutStep("details");
+    setCheckoutOpen(true);
+  }
+
+  function reviewCheckout(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!customer.name || !customer.phone || !customer.email || (deliveryMethod === "delivery" && !customer.address)) {
+      showToast("Please fill in your customer and delivery details");
+      return;
+    }
+    if (scheduleMode === "schedule" && !orderDate) {
+      showToast("Choose a date for your future order");
+      return;
+    }
+    setCheckoutStep("review");
+  }
+
+  function placeOrder() {
+    const orderNumber = `BB-${Math.floor(1000 + Math.random() * 8999)}`;
+    const dateLabel = scheduleMode === "schedule" && orderDate ? `${orderDate} · ${orderTime}` : deliveryMethod === "delivery" ? "Tomorrow · 10:00am – 12:00pm" : "Tomorrow · collection after 10:00am";
+    setOrder({ number: orderNumber, statusIndex: 0, method: deliveryMethod, dateLabel });
+    setCartItems([]);
+    setAppliedCoupon("");
+    setCouponCode("");
+    setCheckoutOpen(false);
+    setCheckoutStep("details");
+    showToast(`Order ${orderNumber} received — thank you`);
+    window.setTimeout(() => document.getElementById("order-tracking")?.scrollIntoView({ behavior: "smooth" }), 100);
+  }
+
+  function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!authEmail || !authPassword) {
+      showToast("Enter your email and password to continue");
+      return;
+    }
+    setSignedIn(true);
+    setAccountOpen(false);
+    showToast(authMode === "signin" ? "Welcome back to Bite & Bloom" : "Your sweet account is ready");
+  }
+
+  function handleContactSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setContactMessage("");
+    showToast("Message sent — we will be in touch shortly");
   }
 
   function scrollToCollection() {
@@ -409,6 +585,8 @@ export default function HomePage() {
     );
   }
 
+  const minOrderDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const whatsappMessage = order ? `Hi Bite & Bloom, I would like an update on order ${order.number}.` : "Hi Bite & Bloom, I would love help choosing a cake.";
   return (
     <div className="site-shell">
       <div className="topline">
@@ -435,7 +613,8 @@ export default function HomePage() {
             <button className="icon-button theme-toggle" onClick={toggleDarkMode} aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}>
               <Icon name={darkMode ? "sun" : "moon"} size={19} />
             </button>
-            <button className="cart-button" onClick={() => showToast(cartCount ? `${cartCount} item${cartCount > 1 ? "s" : ""} ready to check out` : "Your cart is waiting for something sweet")} aria-label="Open cart">
+            <button className="icon-button account-button" onClick={() => setAccountOpen(true)} aria-label={signedIn ? "Open account" : "Sign in"}><span className="account-dot">{signedIn ? "B" : ""}</span><Icon name="user" size={18} /></button>
+            <button className="cart-button" onClick={() => setCartOpen(true)} aria-label="Open cart">
               <Icon name="cart" size={19} /><span className="cart-label">Cart</span><b>{cartCount}</b>
             </button>
             <button className="mobile-menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label={menuOpen ? "Close menu" : "Open menu"} aria-expanded={menuOpen}><Icon name={menuOpen ? "close" : "menu"} /></button>
@@ -472,6 +651,8 @@ export default function HomePage() {
         <div className="ticker" aria-label="Bite and Bloom values">
           <div className="ticker-track"><span>Made to order</span><b>✦</b><span>Seasonal ingredients</span><b>✦</b><span>Delivery across Nairobi</span><b>✦</b><span>Made to order</span><b>✦</b><span>Seasonal ingredients</span><b>✦</b><span>Delivery across Nairobi</span></div>
         </div>
+
+        {order && <section className="order-tracking-section" id="order-tracking"><div className="container"><div className="tracking-header"><div><p className="eyebrow">Your cake is on its way</p><h2>Order <em>{order.number}</em></h2><p>Expected {order.dateLabel} · {order.method === "delivery" ? "Home delivery" : "Pickup from Kilimani studio"}</p></div><a className="whatsapp-button" href={`https://wa.me/254711222333?text=${encodeURIComponent(whatsappMessage)}`} target="_blank" rel="noreferrer"><Icon name="send" size={16} /> WhatsApp support</a></div><div className="tracking-line">{orderStatuses.map((status, index) => <div className={`tracking-step ${index <= order.statusIndex ? "complete" : ""} ${index === order.statusIndex ? "current" : ""}`} key={status.label}><span className="tracking-icon"><Icon name={status.icon} size={17} /></span><div><strong>{status.label}</strong><p>{status.note}</p></div></div>)}</div><div className="tracking-footer"><span><Icon name="clock" size={16} /> We&apos;ll send updates by SMS and WhatsApp</span><button onClick={() => setOrder((current) => current ? { ...current, statusIndex: Math.min(current.statusIndex + 1, orderStatuses.length - 1) } : current)}>Preview next update <Icon name="arrow" size={14} /></button></div></div></section>}
 
         <section className="section section-light" id="occasions">
           <div className="container">
@@ -534,10 +715,18 @@ export default function HomePage() {
           <div className="container"><div className="section-heading heading-row"><div><p className="eyebrow">From the cake people</p><h2>Words we <em>keep</em> close.</h2></div><div className="quote-mark">“</div></div><div className="testimonial-grid">{testimonials.map((testimonial) => <figure className="testimonial-card" key={testimonial.name}><div className="testimonial-stars"><Icon name="star" size={13} /><Icon name="star" size={13} /><Icon name="star" size={13} /><Icon name="star" size={13} /><Icon name="star" size={13} /></div><blockquote>“{testimonial.quote}”</blockquote><figcaption><span className="review-avatar">{testimonial.name.split(" ").map((part) => part[0]).join("")}</span><span><strong>{testimonial.name}</strong><small>{testimonial.detail}</small></span></figcaption></figure>)}</div></div>
         </section>
 
-        <section className="delivery-section" id="delivery"><div className="container delivery-grid"><div className="delivery-copy"><p className="eyebrow">Come on over, or stay cosy</p><h2>We bring the good stuff <em>to you.</em></h2><p>We deliver Monday to Saturday across Nairobi, with careful timing and an extra layer of protection for your cake.</p><div className="delivery-detail"><Icon name="pin" size={20} /><span><strong>Where we deliver</strong><small>Kilimani · Lavington · Westlands · Karen · Kileleshwa<br />CBD · Parklands · Runda · Gigiri and nearby areas</small></span></div><div className="delivery-detail"><Icon name="clock" size={20} /><span><strong>When we bake</strong><small>Mon–Sat, 8:00am–6:00pm<br />Same-day collection from our Kilimani studio</small></span></div></div><div className="contact-card glass-card"><span className="contact-script">Let&apos;s make it sweet</span><h3>Have something<br /><em>in mind?</em></h3><p>Tell us what you&apos;re dreaming up. We&apos;ll help you make it real.</p><a href="mailto:hello@biteandbloom.co.ke" className="contact-line"><Icon name="mail" size={17} /> hello@biteandbloom.co.ke</a><a href="tel:+254711222333" className="contact-line"><Icon name="phone" size={17} /> +254 711 222 333</a><a className="button button-dark full-button" href="mailto:hello@biteandbloom.co.ke?subject=Custom%20cake%20enquiry">Start a conversation <Icon name="send" size={16} /></a></div></div></section>
+        <section className="delivery-section" id="delivery"><div className="container delivery-grid"><div className="delivery-copy"><p className="eyebrow">Come on over, or stay cosy</p><h2>We bring the good stuff <em>to you.</em></h2><p>We deliver Monday to Saturday across Nairobi, with careful timing and an extra layer of protection for your cake.</p><div className="delivery-detail"><Icon name="pin" size={20} /><span><strong>Where we deliver</strong><small>Kilimani · Lavington · Westlands · Karen · Kileleshwa<br />CBD · Parklands · Runda · Gigiri and nearby areas</small></span></div><div className="delivery-detail"><Icon name="clock" size={20} /><span><strong>When we bake</strong><small>Mon–Sat, 8:00am–6:00pm<br />Same-day collection from our Kilimani studio</small></span></div></div><div className="contact-card glass-card"><span className="contact-script">Let&apos;s make it sweet</span><h3>Have something<br /><em>in mind?</em></h3><p>Tell us what you&apos;re dreaming up. We&apos;ll help you make it real.</p><a href="mailto:hello@biteandbloom.co.ke" className="contact-line"><Icon name="mail" size={17} /> hello@biteandbloom.co.ke</a><a href="tel:+254711222333" className="contact-line"><Icon name="phone" size={17} /> +254 711 222 333</a><a className="whatsapp-contact" href={`https://wa.me/254711222333?text=${encodeURIComponent(whatsappMessage)}`} target="_blank" rel="noreferrer"><Icon name="send" size={16} /> Chat on WhatsApp</a><a className="button button-dark full-button" href="mailto:hello@biteandbloom.co.ke?subject=Custom%20cake%20enquiry">Start a conversation <Icon name="send" size={16} /></a></div></div></section>
       </main>
 
-      <footer className="site-footer"><div className="container footer-top"><div className="footer-brand"><a href="#top" className="brand"><span className="brand-mark"><Icon name="cake" size={24} /></span><span><strong>BITE <i>&</i> BLOOM</strong><small>CAKE STUDIO</small></span></a><p>A little more joy, one slice at a time.</p><div className="social-links"><a href="https://instagram.com" aria-label="Instagram"><Icon name="instagram" size={17} /></a><a href="https://facebook.com" aria-label="Facebook"><Icon name="facebook" size={17} /></a></div></div><div className="footer-column"><strong>Explore</strong><a href="#collection">Shop cakes</a><a href="#occasions">Occasions</a><a href="#our-story">Our story</a></div><div className="footer-column"><strong>Need to know</strong><a href="#delivery">Delivery areas</a><a href="#delivery">FAQs</a><a href="mailto:hello@biteandbloom.co.ke">Contact us</a></div><div className="newsletter"><strong>Get the good stuff</strong><p>Seasonal menus, early drops and a little sweetness in your inbox.</p><form onSubmit={(event) => { event.preventDefault(); showToast("You are on the sweet list ✦"); }}><label className="sr-only" htmlFor="newsletter-email">Email address</label><input id="newsletter-email" type="email" required placeholder="Your email address" /><button type="submit" aria-label="Subscribe"><Icon name="arrow" size={17} /></button></form></div></div><div className="container footer-bottom"><span>© {new Date().getFullYear()} Bite & Bloom. Made with care in Nairobi.</span><span>Privacy · Terms · <a href="#top">Back to top ↑</a></span></div></footer>
+      <section className="support-section" id="contact"><div className="container"><div className="section-heading support-heading"><div><p className="eyebrow">Say hello</p><h2>We&apos;re here for the <em>sweet questions.</em></h2><p className="section-intro">Order help, custom cake ideas, delivery questions or just a little cake chat — we&apos;d love to hear from you.</p></div><span className="support-hours"><strong>Mon–Sat</strong><small>8:00am – 6:00pm</small></span></div><div className="support-grid"><form className="contact-form-card" onSubmit={handleContactSubmit}><div className="form-card-heading"><span className="support-icon"><Icon name="mail" size={19} /></span><div><strong>Send us a note</strong><small>We usually reply within a few hours.</small></div></div><div className="form-row"><label><span>Your name</span><input required placeholder="Amina Otieno" /></label><label><span>Email address</span><input required type="email" placeholder="hello@example.com" /></label></div><label><span>How can we help?</span><textarea required value={contactMessage} onChange={(event) => setContactMessage(event.target.value)} placeholder="Tell us what you&apos;re dreaming up..." /></label><button className="button button-dark" type="submit">Send message <Icon name="send" size={15} /></button><div className="direct-contact"><a href="tel:+254711222333"><Icon name="phone" size={15} /> Call us</a><a href={`https://wa.me/254711222333?text=${encodeURIComponent("Hi Bite & Bloom, I have a question.")}`} target="_blank" rel="noreferrer"><Icon name="send" size={15} /> WhatsApp</a></div></form><div className="map-card"><div className="map-heading"><div><strong>Our little corner</strong><small>Kilimani, Nairobi</small></div><a href="https://www.google.com/maps/search/?api=1&query=Kilimani%2C%20Nairobi" target="_blank" rel="noreferrer" aria-label="Open Bite and Bloom location in Google Maps"><Icon name="arrow" size={16} /></a></div><div className="map-frame"><iframe title="Bite and Bloom location map" loading="lazy" src="https://www.google.com/maps?q=Kilimani%20Nairobi&output=embed" /></div><div className="map-address"><Icon name="pin" size={16} /><span><strong>Studio collection</strong><small>13 Riverside Lane, Kilimani · Nairobi</small></span></div></div><div className="faq-card"><div className="form-card-heading"><span className="support-icon"><Icon name="sparkle" size={19} /></span><div><strong>Frequently asked</strong><small>Good things to know before you order.</small></div></div><div className="faq-list">{faqItems.map((faq, index) => <div className={`faq-item ${faqOpen === index ? "open" : ""}`} key={faq.question}><button onClick={() => setFaqOpen(faqOpen === index ? null : index)} aria-expanded={faqOpen === index}>{faq.question}<span>{faqOpen === index ? "−" : "+"}</span></button>{faqOpen === index && <p>{faq.answer}</p>}</div>)}</div><a className="text-link" href={`https://wa.me/254711222333?text=${encodeURIComponent("Hi Bite & Bloom, I have a question.")}`} target="_blank" rel="noreferrer">Ask us on WhatsApp <span>↗</span></a></div></div></div></section>
+
+      <footer className="site-footer"><div className="container footer-top"><div className="footer-brand"><a href="#top" className="brand"><span className="brand-mark"><Icon name="cake" size={24} /></span><span><strong>BITE <i>&</i> BLOOM</strong><small>CAKE STUDIO</small></span></a><p>A little more joy, one slice at a time.</p><div className="social-links"><a href="https://instagram.com" aria-label="Instagram"><Icon name="instagram" size={17} /></a><a href="https://facebook.com" aria-label="Facebook"><Icon name="facebook" size={17} /></a></div></div><div className="footer-column"><strong>Explore</strong><a href="#collection">Shop cakes</a><a href="#occasions">Occasions</a><a href="#our-story">Our story</a></div><div className="footer-column"><strong>Need to know</strong><a href="#delivery">Delivery areas</a><a href="#contact">FAQs</a><a href="#contact">Contact us</a><a className="footer-admin-link" href="/admin">Admin panel ↗</a></div><div className="newsletter"><strong>Get the good stuff</strong><p>Seasonal menus, early drops and a little sweetness in your inbox.</p><form onSubmit={(event) => { event.preventDefault(); showToast("You are on the sweet list ✦"); }}><label className="sr-only" htmlFor="newsletter-email">Email address</label><input id="newsletter-email" type="email" required placeholder="Your email address" /><button type="submit" aria-label="Subscribe"><Icon name="arrow" size={17} /></button></form></div></div><div className="container footer-bottom"><span>© {new Date().getFullYear()} Bite & Bloom. Made with care in Nairobi.</span><span>Privacy · Terms · <a href="#top">Back to top ↑</a></span></div></footer>
+
+      {cartOpen && <div className="drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false); }}><aside className="cart-drawer" role="dialog" aria-modal="true" aria-labelledby="cart-title"><div className="drawer-header"><div><p className="eyebrow">Your sweet selection</p><h2 id="cart-title">Your cart <em>({cartCount})</em></h2></div><button className="modal-close" onClick={() => setCartOpen(false)} aria-label="Close cart"><Icon name="close" size={19} /></button></div>{cartItems.length ? <><div className="drawer-items">{cartItems.map((item) => <div className="drawer-item" key={item.id}><img src={item.cake.image} alt={item.cake.name} /><div className="drawer-item-info"><div className="drawer-item-title"><strong>{item.cake.name}</strong><button onClick={() => removeCartItem(item.id)} aria-label={`Remove ${item.cake.name}`}>&times;</button></div><small>{item.size} · {item.flavor} · {item.shape}</small><small>{item.message ? `Message: “${item.message}”` : item.theme}</small><div className="drawer-item-bottom"><div className="quantity-control"><button onClick={() => updateQuantity(item.id, -1)} aria-label="Decrease quantity">−</button><b>{item.quantity}</b><button onClick={() => updateQuantity(item.id, 1)} aria-label="Increase quantity">+</button></div><strong>{formatPrice(getCustomizedPrice(item.cake, item.size, item.toppings, item.withCandles, item.withCard) * item.quantity)}</strong></div><button className="save-button" onClick={() => saveCartItem(item)}>♡ Save for later</button></div></div>)}</div>{savedItems.length > 0 && <div className="saved-items"><div className="drawer-subheading"><strong>Saved for later</strong><span>{savedItems.length} item{savedItems.length > 1 ? "s" : ""}</span></div>{savedItems.map((item) => <div className="saved-item" key={item.id}><span>{item.cake.name}</span><button onClick={() => moveSavedToCart(item)}>Move to cart</button></div>)}</div>}<form className="coupon-form" onSubmit={applyCoupon}><label htmlFor="coupon-code">Have a code?</label><div><input id="coupon-code" value={couponCode} onChange={(event) => setCouponCode(event.target.value)} placeholder="SWEET10" /><button type="submit">Apply</button></div>{appliedCoupon && <small>{appliedCoupon} applied · {couponDiscount ? `${formatPrice(couponDiscount)} saved` : "discount added"}</small>}</form><div className="cart-summary"><div><span>Subtotal</span><strong>{formatPrice(cartSubtotal)}</strong></div><div><span>Delivery fee <small>{deliveryMethod === "pickup" ? "(pickup)" : cartSubtotal >= 6000 ? "(free over KSh 6,000)" : "(Nairobi)"}</small></span><strong>{deliveryFee ? formatPrice(deliveryFee) : "Free"}</strong></div>{couponDiscount > 0 && <div className="discount-row"><span>Discount</span><strong>− {formatPrice(couponDiscount)}</strong></div>}<div className="estimated-total"><span>Estimated total</span><strong>{formatPrice(cartTotal)}</strong></div></div><button className="button button-dark checkout-button" onClick={openCheckout}>Continue to checkout <Icon name="arrow" size={16} /></button><p className="secure-note"><Icon name="check" size={13} /> You can choose delivery or pickup at checkout</p></> : <div className="empty-cart"><span className="empty-cart-icon"><Icon name="cake" size={29} /></span><h3>Your cart is feeling light.</h3><p>Choose something lovely and we&apos;ll keep it safe here.</p><button className="button button-dark" onClick={() => { setCartOpen(false); scrollToCollection(); }}>Browse cakes <Icon name="arrow" size={15} /></button>{savedItems.length > 0 && <div className="saved-empty"><strong>Saved for later · {savedItems.length}</strong>{savedItems.map((item) => <button key={item.id} onClick={() => moveSavedToCart(item)}>{item.cake.name} <span>Move to cart →</span></button>)}</div>}</div>}</aside></div>}
+
+      {checkoutOpen && <div className="modal-backdrop checkout-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCheckoutOpen(false); }}><div className="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title"><button className="modal-close" onClick={() => setCheckoutOpen(false)} aria-label="Close checkout"><Icon name="close" size={20} /></button><div className="checkout-main"><div className="checkout-topline"><span>Checkout · {checkoutStep === "details" ? "1 of 2" : "2 of 2"}</span><div><b className={checkoutStep === "details" ? "active" : "done"}>1</b><i /><b className={checkoutStep === "review" ? "active" : ""}>2</b></div></div>{checkoutStep === "details" ? <form onSubmit={reviewCheckout}><h2 id="checkout-title">Let&apos;s get you <em>sorted.</em></h2><p className="checkout-intro">A few details, then we&apos;ll take care of the rest.</p><div className="checkout-section"><div className="checkout-section-heading"><strong>Your details</strong><span>Required</span></div><div className="form-row"><label><span>Full name</span><input required value={customer.name} onChange={(event) => setCustomer({ ...customer, name: event.target.value })} placeholder="Amina Otieno" /></label><label><span>Phone number</span><input required type="tel" value={customer.phone} onChange={(event) => setCustomer({ ...customer, phone: event.target.value })} placeholder="0711 222 333" /></label></div><label><span>Email address</span><input required type="email" value={customer.email} onChange={(event) => setCustomer({ ...customer, email: event.target.value })} placeholder="amina@example.com" /></label></div><div className="checkout-section"><div className="checkout-section-heading"><strong>How would you like it?</strong><span>Choose one</span></div><div className="delivery-choice-grid"><button type="button" className={deliveryMethod === "delivery" ? "selected" : ""} onClick={() => setDeliveryMethod("delivery")}><Icon name="truck" size={19} /><span><strong>Home delivery</strong><small>From KSh 300 · Nairobi</small></span></button><button type="button" className={deliveryMethod === "pickup" ? "selected" : ""} onClick={() => setDeliveryMethod("pickup")}><Icon name="pin" size={19} /><span><strong>Pick up from shop</strong><small>13 Riverside Lane, Kilimani</small></span></button></div>{deliveryMethod === "delivery" ? <label><span>Delivery address</span><input required value={customer.address} onChange={(event) => setCustomer({ ...customer, address: event.target.value })} placeholder="Building, street and area" /></label> : <div className="pickup-note"><Icon name="pin" size={17} /><span><strong>Studio collection</strong><small>13 Riverside Lane, Kilimani · We&apos;ll have it ready for you.</small></span></div>}</div><div className="checkout-section"><div className="checkout-section-heading"><strong>When should we make it?</strong><span>Plan ahead</span></div><div className="schedule-choice"><label className={scheduleMode === "next" ? "selected" : ""}><input type="radio" checked={scheduleMode === "next"} onChange={() => setScheduleMode("next")} />{deliveryMethod === "delivery" ? "Next available · Tomorrow" : "Next available · Tomorrow"}<small>{deliveryMethod === "delivery" ? "10:00am – 12:00pm" : "Collection after 10:00am"}</small></label><label className={scheduleMode === "schedule" ? "selected" : ""}><input type="radio" checked={scheduleMode === "schedule"} onChange={() => setScheduleMode("schedule")} />Schedule a future order{scheduleMode === "schedule" && <><input type="date" min={minOrderDate} value={orderDate} onChange={(event) => setOrderDate(event.target.value)} /><select value={orderTime} onChange={(event) => setOrderTime(event.target.value)}><option>10:00am – 12:00pm</option><option>12:00pm – 2:00pm</option><option>3:00pm – 5:00pm</option></select></>}</label></div></div><label className="checkout-notes"><span>Order notes <small>Optional</small></span><textarea value={customer.notes} onChange={(event) => setCustomer({ ...customer, notes: event.target.value })} placeholder="Gate code, delivery note or anything else we should know" /></label><button className="button button-dark checkout-next" type="submit">Review your order <Icon name="arrow" size={16} /></button></form> : <div className="review-step"><h2 id="checkout-title">Ready to make it <em>official?</em></h2><p className="checkout-intro">Everything looks good. We&apos;ll confirm your order by phone and email.</p><div className="review-card"><div><span>Customer</span><strong>{customer.name}</strong><small>{customer.phone} · {customer.email}</small></div><div><span>{deliveryMethod === "delivery" ? "Deliver to" : "Pickup from"}</span><strong>{deliveryMethod === "delivery" ? customer.address : "Bite & Bloom studio"}</strong><small>{orderDate && scheduleMode === "schedule" ? `${orderDate} · ${orderTime}` : "Tomorrow · next available slot"}</small></div></div><div className="review-items">{cartItems.map((item) => <div key={item.id}><span>{item.quantity} × {item.cake.name}<small>{item.size} · {item.flavor}</small></span><strong>{formatPrice(getCustomizedPrice(item.cake, item.size, item.toppings, item.withCandles, item.withCard) * item.quantity)}</strong></div>)}</div><div className="review-total"><span>Estimated total</span><strong>{formatPrice(cartTotal)}</strong></div><div className="review-actions"><button className="button button-outline" onClick={() => setCheckoutStep("details")}>Back</button><button className="button button-dark" onClick={placeOrder}>Place order <Icon name="check" size={16} /></button></div></div>}</div><aside className="checkout-aside"><p className="eyebrow">A little preview</p><h3>Your order <em>so far.</em></h3><div className="checkout-aside-items">{cartItems.map((item) => <div key={item.id}><img src={item.cake.image} alt="" /><span>{item.quantity} × {item.cake.name}<small>{item.size} · {item.flavor}</small></span><strong>{formatPrice(getCustomizedPrice(item.cake, item.size, item.toppings, item.withCandles, item.withCard) * item.quantity)}</strong></div>)}</div><div className="checkout-aside-total"><span>Subtotal</span><strong>{formatPrice(cartSubtotal)}</strong><span>Delivery</span><strong>{deliveryFee ? formatPrice(deliveryFee) : "Free"}</strong><span>Total</span><strong>{formatPrice(cartTotal)}</strong></div><p className="checkout-aside-note"><Icon name="leaf" size={14} /> No payment is taken here. We&apos;ll contact you to confirm.</p></aside></div></div>}
+
+      {accountOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setAccountOpen(false); }}><div className="account-modal" role="dialog" aria-modal="true" aria-labelledby="account-title"><button className="modal-close" onClick={() => setAccountOpen(false)} aria-label="Close account"><Icon name="close" size={20} /></button>{signedIn ? <div className="account-dashboard"><span className="account-avatar">B</span><p className="eyebrow">Your sweet account</p><h2 id="account-title">Welcome back, <em>{customer.name || "cake person"}.</em></h2><p>Everything you need for a smoother order, all in one place.</p><div className="account-benefits"><div><strong>240</strong><small>Loyalty points</small></div><div><strong>{order ? "1" : "0"}</strong><small>Orders placed</small></div><div><strong>0</strong><small>Saved addresses</small></div></div><div className="account-links"><button onClick={() => { setAccountOpen(false); if (order) document.getElementById("order-tracking")?.scrollIntoView({ behavior: "smooth" }); }}>Order history <span>↗</span></button><button onClick={() => showToast("Saved addresses are coming with your next order")}>Saved addresses <span>↗</span></button><button onClick={() => { setSignedIn(false); setAccountOpen(false); showToast("You have been signed out"); }}>Sign out <span>↗</span></button></div></div> : <div className="account-auth"><span className="account-avatar"><Icon name="cake" size={22} /></span><p className="eyebrow">Bite & Bloom account</p><h2 id="account-title">Keep the good stuff <em>close.</em></h2><p>Save addresses, track orders and collect points for every sweet moment.</p><div className="auth-tabs"><button className={authMode === "signin" ? "active" : ""} onClick={() => setAuthMode("signin")}>Sign in</button><button className={authMode === "signup" ? "active" : ""} onClick={() => setAuthMode("signup")}>Create account</button></div><form onSubmit={handleAuthSubmit}><label><span>Email address</span><input type="email" required value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} placeholder="you@example.com" /></label><label><span>Password</span><input type="password" required minLength={6} value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="At least 6 characters" /></label><button className="button button-dark full-button" type="submit">{authMode === "signin" ? "Sign in" : "Create my account"} <Icon name="arrow" size={15} /></button></form><button className="google-button" onClick={() => { setSignedIn(true); setAccountOpen(false); showToast("Signed in with Google"); }}>Continue with Google</button><button className="guest-button" onClick={() => { setAccountOpen(false); showToast("Guest checkout is ready whenever you are"); }}>Continue as guest</button></div>}</div></div>}
 
       {selectedCake && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedCake(null); }}><div className="product-modal" role="dialog" aria-modal="true" aria-labelledby="product-title"><button className="modal-close" onClick={() => setSelectedCake(null)} aria-label="Close product details"><Icon name="close" size={20} /></button><div className="product-gallery"><div className="product-main-image image-sheen"><img src={selectedCake.images[activeImage]} alt={selectedCake.name} /></div><div className="product-thumbnails">{selectedCake.images.map((image, index) => <button key={image} className={activeImage === index ? "active" : ""} onClick={() => setActiveImage(index)}><img src={image} alt={`${selectedCake.name} view ${index + 1}`} /></button>)}</div></div><div className="product-details"><div className="product-kicker"><span>{selectedCake.category}</span><span><Icon name="star" size={13} /> {selectedCake.rating} · {selectedCake.reviews} reviews</span></div><h2 id="product-title">{selectedCake.name}</h2><p className="product-description">{selectedCake.description}</p><strong className="product-price">From {formatPrice(selectedCake.price)}</strong><div className="customizer"><div className="customizer-section"><div className="customizer-label"><strong>Choose a size</strong><span>Required</span></div><div className="option-grid option-grid-3">{["0.5 kg", "1 kg", "2 kg"].map((size) => <button key={size} className={selectedSize === size ? "selected" : ""} onClick={() => setSelectedSize(size)}>{size}</button>)}</div></div><div className="customizer-section"><div className="customizer-label"><strong>Pick a flavor</strong><span>Required</span></div><div className="option-grid">{selectedCake.flavors.map((flavor) => <button key={flavor} className={selectedFlavor === flavor ? "selected" : ""} onClick={() => setSelectedFlavor(flavor)}>{flavor}</button>)}</div></div><div className="customizer-two-col"><div className="customizer-section"><div className="customizer-label"><strong>Shape</strong></div><div className="option-grid">{selectedCake.shapes.map((shape) => <button key={shape} className={selectedShape === shape ? "selected" : ""} onClick={() => setSelectedShape(shape)}>{shape}</button>)}</div></div><div className="customizer-section"><div className="customizer-label"><strong>Finish</strong></div><select className="select-control" value={theme} onChange={(event) => setTheme(event.target.value)}><option>Whipped cream</option><option>Buttercream</option><option>Naked finish</option><option>Chocolate ganache</option></select></div></div><div className="customizer-section"><div className="customizer-label"><strong>Your message</strong><span>Optional</span></div><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="e.g. Happy birthday, Amara!" maxLength={80} /><small className="field-hint">{message.length}/80 characters</small></div><div className="customizer-section"><div className="customizer-label"><strong>Make it yours</strong><span>Optional extras</span></div><div className="extra-grid">{["Fresh fruit", "Edible flowers", "Chocolate curls", "Macarons"].map((topping) => <button key={topping} className={toppings.includes(topping) ? "selected" : ""} onClick={() => toggleTopping(topping)}><span className="extra-check">{toppings.includes(topping) && <Icon name="check" size={13} />}</span>{topping}</button>)}</div><label className="upload-control"><Icon name="upload" size={17} /><span><strong>{uploadName || "Upload inspiration image"}</strong><small>{uploadName ? "Ready to share with our baker" : "JPG or PNG · up to 5MB"}</small></span><input type="file" accept="image/png,image/jpeg" onChange={(event) => setUploadName(event.target.files?.[0]?.name ?? "")} /></label><div className="toggle-options"><label><input type="checkbox" checked={withCandles} onChange={(event) => setWithCandles(event.target.checked)} /><span className="fake-toggle" />Add candles <b>+ KSh 250</b></label><label><input type="checkbox" checked={withCard} onChange={(event) => setWithCard(event.target.checked)} /><span className="fake-toggle" />Add a greeting card <b>+ KSh 350</b></label></div></div></div><div className="add-cart-row"><div><small>Total from</small><strong>{formatPrice(customizationPrice)}</strong></div><button className="button button-dark" onClick={addToCart}>Add to cart <Icon name="cart" size={17} /></button></div><p className="allergen-note"><Icon name="leaf" size={14} /> {selectedCake.ingredients} <br /><span>Allergen note: {selectedCake.allergens}</span></p></div></div></div>}
       {toast && <div className="toast" role="status"><span><Icon name="check" size={16} /></span>{toast}</div>}

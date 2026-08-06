@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev frontend",
+    "dev": "next dev --turbo frontend",
     "build": "next build frontend",
     "start": "next start frontend",
     "lint": "next lint frontend",
