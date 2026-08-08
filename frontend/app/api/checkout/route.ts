@@ -11,7 +11,7 @@ import { getPrismaClient } from "../../../lib/server/prisma";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type CheckoutInput = { name: string; email: string; phone: string; fulfillmentType: "DELIVERY" | "PICKUP"; address?: string; notes?: string };
+type CheckoutInput = { name: string; email: string; phone: string; fulfillmentType: "DELIVERY" | "PICKUP"; paymentMethod: "MPESA" | "CASH_ON_DELIVERY"; address?: string; notes?: string };
 
 class CheckoutError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
@@ -23,8 +23,9 @@ function parseCheckout(value: unknown): CheckoutInput | null {
   const text = (item: unknown, min: number, max: number): item is string => typeof item === "string" && item.trim().length >= min && item.trim().length <= max;
   const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
   const fulfillmentType = input.fulfillmentType === "DELIVERY" || input.fulfillmentType === "PICKUP" ? input.fulfillmentType : null;
-  if (!text(input.name, 2, 120) || !/^\S+@\S+\.\S+$/.test(email) || !text(input.phone, 7, 32) || !fulfillmentType || (fulfillmentType === "DELIVERY" && !text(input.address, 5, 500))) return null;
-  return { name: input.name.trim(), email, phone: input.phone.trim(), fulfillmentType, ...(text(input.address, 1, 500) ? { address: input.address.trim() } : {}), ...(text(input.notes, 1, 2000) ? { notes: input.notes.trim() } : {}) };
+  const paymentMethod = input.paymentMethod === "MPESA" || input.paymentMethod === "CASH_ON_DELIVERY" ? input.paymentMethod : null;
+  if (!text(input.name, 2, 120) || !/^\S+@\S+\.\S+$/.test(email) || !text(input.phone, 7, 32) || !fulfillmentType || !paymentMethod || (fulfillmentType === "DELIVERY" && !text(input.address, 5, 500))) return null;
+  return { name: input.name.trim(), email, phone: input.phone.trim(), fulfillmentType, paymentMethod, ...(text(input.address, 1, 500) ? { address: input.address.trim() } : {}), ...(text(input.notes, 1, 2000) ? { notes: input.notes.trim() } : {}) };
 }
 
 function orderNumber(): string {
@@ -35,8 +36,8 @@ export async function POST(request: NextRequest) {
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Checkout is not configured yet.", 503);
   const input = parseCheckout(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Check your contact and delivery details.", 400);
-  if (!hasMpesaConfiguration()) return apiError("CONFIGURATION_ERROR", "M-Pesa payments are not configured yet.", 503);
-  if (!normalizeMpesaPhone(input.phone)) return apiError("VALIDATION_ERROR", "Enter a valid Kenyan M-Pesa phone number.", 400);
+  if (input.paymentMethod === "MPESA" && !hasMpesaConfiguration()) return apiError("CONFIGURATION_ERROR", "M-Pesa payments are not configured yet.", 503);
+  if (input.paymentMethod === "MPESA" && !normalizeMpesaPhone(input.phone)) return apiError("VALIDATION_ERROR", "Enter a valid Kenyan M-Pesa phone number.", 400);
 
   try {
     const { cart } = await getGuestCart(request);
@@ -58,15 +59,16 @@ export async function POST(request: NextRequest) {
 
       const deliveryFee = input.fulfillmentType === "DELIVERY" ? (subtotal >= 6000 ? 0 : 350) : 0;
       const total = subtotal + deliveryFee;
+      const initialStatus = input.paymentMethod === "CASH_ON_DELIVERY" ? "CONFIRMED" : "PENDING_PAYMENT";
       const order = await tx.order.create({
         data: {
           orderNumber: orderNumber(), email: input.email, phone: input.phone, fulfillmentType: input.fulfillmentType,
-          subtotal, deliveryFee, total, notes: input.notes,
+          status: initialStatus, subtotal, deliveryFee, total, notes: input.notes,
           cart: { connect: { id: freshCart.id } },
           items: { create: freshCart.items.map((item) => ({ cakeName: item.variant.cake.name, variantName: item.variant.name, sku: item.variant.sku, quantity: item.quantity, unitPrice: item.variant.price, lineTotal: Number(item.variant.price) * item.quantity, customizations: item.customizations as Prisma.InputJsonValue | undefined, cake: { connect: { id: item.variant.cakeId } }, variant: { connect: { id: item.variantId } } })) },
           addresses: { create: { type: "SHIPPING", recipientName: input.name, line1: input.fulfillmentType === "DELIVERY" ? input.address! : "Bite & Bloom studio collection", city: "Nairobi", country: "KE", phone: input.phone } },
-          payments: { create: { provider: "MPESA", amount: total, currency: freshCart.currency, status: "PENDING", metadata: { method: "stk_push" } } },
-          statusHistory: { create: { toStatus: "PENDING_PAYMENT", reason: "Order submitted" } },
+          payments: { create: { provider: input.paymentMethod === "MPESA" ? "MPESA" : "CASH", amount: total, currency: freshCart.currency, status: "PENDING", metadata: { method: input.paymentMethod === "MPESA" ? "stk_push" : "cash_on_delivery" } } },
+          statusHistory: { create: { toStatus: initialStatus, reason: input.paymentMethod === "MPESA" ? "Order submitted" : "Cash on delivery order submitted" } },
         }, include: { payments: true },
       });
 
@@ -81,13 +83,17 @@ export async function POST(request: NextRequest) {
       return order;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
+    if (input.paymentMethod === "CASH_ON_DELIVERY") {
+      return apiSuccess({ orderNumber: order.orderNumber, status: order.status, total: Number(order.total), currency: order.currency, paymentInitiated: false, paymentMethod: "CASH_ON_DELIVERY", paymentMessage: "Cash on delivery selected. We will confirm your order on WhatsApp." }, { status: 201 });
+    }
+
     try {
       const payment = order.payments[0];
       const stkPush = await initiateStkPush({ orderNumber: order.orderNumber, amount: Number(order.total), phone: input.phone, description: `Bite & Bloom ${order.orderNumber}` });
       await getPrismaClient().payment.update({ where: { id: payment.id }, data: { providerReference: stkPush.checkoutRequestId, metadata: { merchantRequestId: stkPush.merchantRequestId, checkoutRequestId: stkPush.checkoutRequestId } } });
-      return apiSuccess({ orderNumber: order.orderNumber, status: order.status, total: Number(order.total), currency: order.currency, paymentInitiated: true, paymentMessage: stkPush.customerMessage }, { status: 201 });
+      return apiSuccess({ orderNumber: order.orderNumber, status: order.status, total: Number(order.total), currency: order.currency, paymentInitiated: true, paymentMethod: "MPESA", paymentMessage: stkPush.customerMessage }, { status: 201 });
     } catch {
-      return apiSuccess({ orderNumber: order.orderNumber, status: order.status, total: Number(order.total), currency: order.currency, paymentInitiated: false, paymentMessage: "Your order is reserved, but the M-Pesa prompt could not be started. Please contact support to complete payment." }, { status: 202 });
+      return apiSuccess({ orderNumber: order.orderNumber, status: order.status, total: Number(order.total), currency: order.currency, paymentInitiated: false, paymentMethod: "MPESA", paymentMessage: "Your order is reserved, but the M-Pesa prompt could not be started. Please contact support to complete payment." }, { status: 202 });
     }
   } catch (error) {
     if (error instanceof CheckoutError) return apiError("VALIDATION_ERROR", error.message, error.status);

@@ -391,6 +391,7 @@ export default function HomePage() {
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState("");
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("delivery");
+  const [paymentMethod, setPaymentMethod] = useState<"MPESA" | "CASH_ON_DELIVERY">("MPESA");
   const [scheduleMode, setScheduleMode] = useState<"next" | "schedule">("next");
   const [orderDate, setOrderDate] = useState("");
   const [orderTime, setOrderTime] = useState("10:00am – 12:00pm");
@@ -641,24 +642,38 @@ export default function HomePage() {
       showToast("Choose a date for your future order");
       return;
     }
+    const useMpesa = window.confirm("Choose payment method:\n\nOK — Pay by M-Pesa on your phone\nCancel — Pay cash on delivery");
+    setPaymentMethod(useMpesa ? "MPESA" : "CASH_ON_DELIVERY");
     setCheckoutStep("review");
   }
 
+  function whatsappOrderLink(orderNumber: string): string {
+    const phone = process.env.NEXT_PUBLIC_WHATSAPP_ORDER_PHONE || "254711222333";
+    const summary = cartItems.map((item) => `${item.quantity} × ${item.cake.name} (${item.size})`).join(", ");
+    const message = `Hi Bite & Bloom, I placed Cash on Delivery order ${orderNumber}.\n\nItems: ${summary}\nTotal: ${formatPrice(cartTotal)}\nDelivery: ${deliveryMethod === "delivery" ? customer.address : "Studio pickup"}\nCustomer: ${customer.name} · ${customer.phone}`;
+    return `https://wa.me/${phone.replace(/\D/g, "")}?text=${encodeURIComponent(message)}`;
+  }
+
   async function placeOrder() {
+    const whatsappWindow = paymentMethod === "CASH_ON_DELIVERY" ? window.open("", "_blank") : null;
     const response = await fetch("/api/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: customer.name, email: customer.email, phone: customer.phone, fulfillmentType: deliveryMethod === "delivery" ? "DELIVERY" : "PICKUP", address: customer.address, notes: customer.notes }),
+      body: JSON.stringify({ name: customer.name, email: customer.email, phone: customer.phone, fulfillmentType: deliveryMethod === "delivery" ? "DELIVERY" : "PICKUP", paymentMethod, address: customer.address, notes: customer.notes }),
     }).catch(() => null);
     if (!response?.ok) {
+      whatsappWindow?.close();
       showToast("We could not place your order. Please check your cart and try again.");
       return;
     }
-    const payload = await response.json() as { data?: { orderNumber: string; paymentInitiated?: boolean; paymentMessage?: string } };
+    const payload = await response.json() as { data?: { orderNumber: string; paymentInitiated?: boolean; paymentMethod?: "MPESA" | "CASH_ON_DELIVERY"; paymentMessage?: string } };
     if (!payload.data?.orderNumber) {
+      whatsappWindow?.close();
       showToast("We could not confirm your order. Please try again.");
       return;
     }
+    if (payload.data.paymentMethod === "CASH_ON_DELIVERY" && whatsappWindow) whatsappWindow.location.href = whatsappOrderLink(payload.data.orderNumber);
+    else whatsappWindow?.close();
     const dateLabel = scheduleMode === "schedule" && orderDate ? `${orderDate} · ${orderTime}` : deliveryMethod === "delivery" ? "Tomorrow · 10:00am – 12:00pm" : "Tomorrow · collection after 10:00am";
     setOrder({ number: payload.data.orderNumber, statusIndex: 0, method: deliveryMethod, dateLabel });
     setCartItems([]);
