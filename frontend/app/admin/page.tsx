@@ -6,11 +6,12 @@ import type { FormEvent } from "react";
 type IconName = "arrow" | "cake" | "cart" | "check" | "clock" | "close" | "heart" | "leaf" | "lock" | "pin" | "search" | "send" | "sparkle" | "star" | "truck" | "upload" | "user";
 type AdminTab = "overview" | "cakes" | "orders" | "delivery" | "customers" | "analytics" | "inventory" | "reviews" | "staff";
 type AdminCake = { id: number; backendId?: string; name: string; category: string; price: number; image: string; tag: string; soldOut: boolean; stock: number; margin: number; orders: number };
-type AdminOrder = { id: string; customer: string; cake: string; amount: number; status: string; time: string; driver: string; delivery: string };
+type AdminOrder = { id: string; backendId?: string; customer: string; cake: string; amount: number; status: string; time: string; driver: string; delivery: string };
 type InventoryItem = { name: string; unit: string; stock: number; reorderAt: number; cost: string };
 type Review = { id: number; customer: string; cake: string; rating: number; quote: string; status: "Pending" | "Approved" };
 type AdminCatalogueCake = { id: string; name: string; status: string; basePrice: number; categories: Array<{ id: string; name: string }>; variants: Array<{ isActive: boolean; stock: number }> };
 type AdminCataloguePayload = { cakes: AdminCatalogueCake[]; categories: Array<{ id: string; name: string }> };
+type AdminOrderRecord = { id: string; orderNumber: string; customer: string; status: string; total: number; placedAt: string; courier: string | null; fulfillmentType: string; items: Array<{ cakeName: string; variantName: string | null; quantity: number }> };
 
 const imageBase = "https://images.unsplash.com/";
 const initialCakes: AdminCake[] = [
@@ -101,11 +102,38 @@ export default function AdminPage() {
     return () => { isMounted = false; };
   }, []);
 
+  useEffect(() => {
+    const statusLabel: Record<string, string> = { PENDING_PAYMENT: "Pending", PAID: "Paid", CONFIRMED: "Accepted", PREPARING: "Baking", READY_FOR_DISPATCH: "Decorating", OUT_FOR_DELIVERY: "Out for delivery", DELIVERED: "Delivered", COMPLETED: "Delivered", CANCELLED: "Rejected", FAILED: "Rejected" };
+    let isMounted = true;
+    async function loadOrders() {
+      try {
+        const response = await fetch("/api/admin/orders", { credentials: "same-origin" });
+        if (!response.ok) return;
+        const payload = await response.json() as { data?: AdminOrderRecord[] };
+        if (!payload.data || !isMounted) return;
+        setOrders(payload.data.map((order) => ({ id: order.orderNumber, backendId: order.id, customer: order.customer, cake: order.items.map((item) => `${item.quantity} × ${item.cakeName}${item.variantName ? ` · ${item.variantName}` : ""}`).join(", "), amount: order.total, status: statusLabel[order.status] ?? order.status, time: new Date(order.placedAt).toLocaleString("en-KE"), driver: order.courier ?? "Unassigned", delivery: order.fulfillmentType === "DELIVERY" ? "Delivery" : "Pickup" })));
+      } catch {
+        // Keep the prototype order data visible while the service is unavailable.
+      }
+    }
+    void loadOrders();
+    return () => { isMounted = false; };
+  }, []);
+
   const filteredCakes = cakes.filter((cake) => `${cake.name} ${cake.category}`.toLowerCase().includes(query.toLowerCase()));
   const filteredOrders = orders.filter((order) => orderFilter === "All orders" || order.status === orderFilter);
   const pendingOrders = orders.filter((order) => order.status === "Pending").length;
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(""), 2600); };
-  const updateOrder = (id: string, field: "status" | "driver", value: string) => { setOrders((items) => items.map((item) => item.id === id ? { ...item, [field]: value } : item)); notify(`${id} updated`); };
+  const updateOrder = async (id: string, field: "status" | "driver", value: string) => {
+    const order = orders.find((item) => item.id === id);
+    const statuses: Record<string, string> = { Pending: "PENDING_PAYMENT", Paid: "PAID", Accepted: "CONFIRMED", Baking: "PREPARING", Decorating: "READY_FOR_DISPATCH", "Out for delivery": "OUT_FOR_DELIVERY", Delivered: "DELIVERED", Rejected: "CANCELLED" };
+    if (field === "status" && order?.backendId && statuses[value]) {
+      const response = await fetch(`/api/admin/orders/${order.backendId}`, { method: "PATCH", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: statuses[value] }) }).catch(() => null);
+      if (!response?.ok) { notify("That status change is not allowed yet"); return; }
+    }
+    setOrders((items) => items.map((item) => item.id === id ? { ...item, [field]: value } : item));
+    notify(`${id} updated`);
+  };
 
   async function saveCake(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
