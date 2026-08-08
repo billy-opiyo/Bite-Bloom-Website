@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 
 type IconName = "arrow" | "cake" | "cart" | "check" | "clock" | "close" | "heart" | "leaf" | "lock" | "pin" | "search" | "send" | "sparkle" | "star" | "truck" | "upload" | "user";
@@ -9,6 +9,8 @@ type AdminCake = { id: number; name: string; category: string; price: number; im
 type AdminOrder = { id: string; customer: string; cake: string; amount: number; status: string; time: string; driver: string; delivery: string };
 type InventoryItem = { name: string; unit: string; stock: number; reorderAt: number; cost: string };
 type Review = { id: number; customer: string; cake: string; rating: number; quote: string; status: "Pending" | "Approved" };
+type AdminCatalogueCake = { id: string; name: string; status: string; basePrice: number; categories: Array<{ id: string; name: string }>; variants: Array<{ isActive: boolean; stock: number }> };
+type AdminCataloguePayload = { cakes: AdminCatalogueCake[]; categories: Array<{ id: string; name: string }> };
 
 const imageBase = "https://images.unsplash.com/";
 const initialCakes: AdminCake[] = [
@@ -75,6 +77,29 @@ export default function AdminPage() {
   const [editor, setEditor] = useState<AdminCake | null>(null);
   const [newCake, setNewCake] = useState({ name: "", category: "Birthday", price: "4200", soldOut: false, photo: "" });
   const [toast, setToast] = useState("");
+  const [catalogueCategories, setCatalogueCategories] = useState<Array<{ id: string; name: string }>>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCatalogue() {
+      try {
+        const response = await fetch("/api/admin/cakes", { credentials: "same-origin" });
+        if (!response.ok) return;
+        const payload = await response.json() as { data?: AdminCataloguePayload };
+        if (!payload.data || !isMounted) return;
+        setCatalogueCategories(payload.data.categories);
+        setCakes(payload.data.cakes.map((cake, index) => {
+          const fallback = initialCakes.find((item) => item.name === cake.name) ?? initialCakes[0];
+          const stock = cake.variants.reduce((total, variant) => total + variant.stock, 0);
+          return { ...fallback, id: index + 1, name: cake.name, category: cake.categories[0]?.name ?? "Uncategorised", price: cake.basePrice, tag: cake.status, soldOut: !cake.variants.some((variant) => variant.isActive), stock };
+        }));
+      } catch {
+        // Keep the visual prototype data visible if the protected API is unavailable.
+      }
+    }
+    void loadCatalogue();
+    return () => { isMounted = false; };
+  }, []);
 
   const filteredCakes = cakes.filter((cake) => `${cake.name} ${cake.category}`.toLowerCase().includes(query.toLowerCase()));
   const filteredOrders = orders.filter((order) => orderFilter === "All orders" || order.status === orderFilter);
@@ -82,12 +107,19 @@ export default function AdminPage() {
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(""), 2600); };
   const updateOrder = (id: string, field: "status" | "driver", value: string) => { setOrders((items) => items.map((item) => item.id === id ? { ...item, [field]: value } : item)); notify(`${id} updated`); };
 
-  function saveCake(event: FormEvent<HTMLFormElement>) {
+  async function saveCake(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const price = Number(newCake.price);
     if (!newCake.name.trim() || !price) { notify("Add a name and valid price"); return; }
     if (editor) setCakes((items) => items.map((cake) => cake.id === editor.id ? { ...cake, name: newCake.name, category: newCake.category, price, soldOut: newCake.soldOut, stock: newCake.soldOut ? 0 : Math.max(cake.stock, 12), tag: newCake.soldOut ? "Sold out" : cake.tag } : cake));
-    else setCakes((items) => [{ ...initialCakes[0], id: Math.max(...items.map((cake) => cake.id)) + 1, name: newCake.name, category: newCake.category, price, soldOut: newCake.soldOut, stock: newCake.soldOut ? 0 : 12, tag: newCake.soldOut ? "Sold out" : "New" }, ...items]);
+    else {
+      const category = catalogueCategories.find((item) => item.name === newCake.category);
+      if (!category) { notify("This category is not available in the catalogue yet"); return; }
+      const slug = newCake.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      const response = await fetch("/api/admin/cakes", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newCake.name, slug, basePrice: price, categoryIds: [category.id], variants: [{ name: "1 kg", sku: `CUSTOM-${Date.now()}`, price }] }) });
+      if (!response.ok) { notify("Could not add this cake. Check the menu details and try again."); return; }
+      setCakes((items) => [{ ...initialCakes[0], id: Math.max(...items.map((cake) => cake.id)) + 1, name: newCake.name, category: newCake.category, price, soldOut: newCake.soldOut, stock: newCake.soldOut ? 0 : 12, tag: newCake.soldOut ? "Sold out" : "New" }, ...items]);
+    }
     setEditor(null); notify(editor ? "Cake updated" : "Cake added to menu");
   }
 

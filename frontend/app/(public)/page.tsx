@@ -75,6 +75,12 @@ type OrderDetails = {
   dateLabel: string;
 };
 
+type CatalogueResponseCake = {
+  name: string;
+  price: number;
+  categories: Array<{ name: string }>;
+};
+
 const imageBase = "https://images.unsplash.com/";
 
 const orderStatuses: { label: string; note: string; icon: IconName }[] = [
@@ -397,6 +403,7 @@ export default function HomePage() {
   const [withCandles, setWithCandles] = useState(false);
   const [withCard, setWithCard] = useState(false);
   const [uploadName, setUploadName] = useState("");
+  const [catalogueCakes, setCatalogueCakes] = useState<Record<string, CatalogueResponseCake>>({});
   const cartCount = cartItems.reduce((count, item) => count + item.quantity, 0);
 
   useEffect(() => {
@@ -419,9 +426,35 @@ export default function HomePage() {
     };
   }, [selectedCake, cartOpen, checkoutOpen, accountOpen]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadCatalogue() {
+      try {
+        const response = await fetch("/api/cakes", { signal: controller.signal });
+        if (!response.ok) return;
+        const payload = await response.json() as { data?: CatalogueResponseCake[] };
+        if (!payload.data) return;
+        setCatalogueCakes(Object.fromEntries(payload.data.map((cake) => [cake.name, cake])));
+      } catch {
+        // The static visual catalogue remains available while the API is offline.
+      }
+    }
+
+    void loadCatalogue();
+    return () => controller.abort();
+  }, []);
+
+  const displayedCakes = useMemo(() => cakes.map((cake) => {
+    const serverCake = catalogueCakes[cake.name];
+    return serverCake
+      ? { ...cake, price: serverCake.price, category: serverCake.categories[0]?.name ?? cake.category }
+      : cake;
+  }), [catalogueCakes]);
+
   const filteredCakes = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const result = cakes.filter((cake) => {
+    const result = displayedCakes.filter((cake) => {
       const matchesCategory = activeCategory === "All cakes" || cake.category === activeCategory;
       const matchesSearch = !query || `${cake.name} ${cake.category} ${cake.tag}`.toLowerCase().includes(query);
       return matchesCategory && matchesSearch;
@@ -433,7 +466,7 @@ export default function HomePage() {
       if (sortBy === "rating") return b.rating - a.rating;
       return b.reviews - a.reviews;
     });
-  }, [activeCategory, search, sortBy]);
+  }, [activeCategory, displayedCakes, search, sortBy]);
 
   const customizationPrice = selectedCake ? getCustomizedPrice(selectedCake, selectedSize, toppings, withCandles, withCard) : 0;
   const cartSubtotal = cartItems.reduce(
@@ -639,8 +672,8 @@ export default function HomePage() {
               </div>
             </div>
             <div className="hero-art fade-in">
-              <div className="hero-image-main image-sheen"><img src={cakes[0].image} alt="Strawberry cake with fresh flowers" /></div>
-              <div className="hero-image-small image-sheen"><img src={cakes[2].image} alt="Lemon cake slice" /></div>
+              <div className="hero-image-main image-sheen"><img src={displayedCakes[0].image} alt="Strawberry cake with fresh flowers" /></div>
+              <div className="hero-image-small image-sheen"><img src={displayedCakes[2].image} alt="Lemon cake slice" /></div>
               <div className="hero-note glass-card"><span className="note-stamp">01</span><strong>Sweet things,<br />made slowly.</strong><small>Since 2018 · Nairobi</small></div>
               <div className="hero-float">Baked with <span>♡</span><br />in every layer</div>
               <div className="hero-sun" />
@@ -708,7 +741,7 @@ export default function HomePage() {
         </section>
 
         <section className="section promo-section">
-          <div className="container promo-grid"><div className="promo-card promo-main"><div><p className="eyebrow">For the last-minute lovers</p><h2>Tomorrow tastes<br /><em>this good.</em></h2><p>Order by noon for next-day delivery in Nairobi.</p><button className="button button-light" onClick={scrollToCollection}>Shop ready-to-love <Icon name="arrow" size={17} /></button></div><div className="promo-image"><img src={cakes[3].image} alt="Pink cake with flowers" /></div></div><div className="promo-card promo-side"><span className="promo-side-icon"><Icon name="cake" size={28} /></span><p className="eyebrow">Make it yours</p><h3>Your cake,<br /><em>your story.</em></h3><p>Add a message, colors, toppings and all the tiny things that make it feel like you.</p><button className="text-link text-link-light" onClick={() => openCake(cakes[0])}>Start customizing <span>↗</span></button></div></div>
+          <div className="container promo-grid"><div className="promo-card promo-main"><div><p className="eyebrow">For the last-minute lovers</p><h2>Tomorrow tastes<br /><em>this good.</em></h2><p>Order by noon for next-day delivery in Nairobi.</p><button className="button button-light" onClick={scrollToCollection}>Shop ready-to-love <Icon name="arrow" size={17} /></button></div><div className="promo-image"><img src={displayedCakes[3].image} alt="Pink cake with flowers" /></div></div><div className="promo-card promo-side"><span className="promo-side-icon"><Icon name="cake" size={28} /></span><p className="eyebrow">Make it yours</p><h3>Your cake,<br /><em>your story.</em></h3><p>Add a message, colors, toppings and all the tiny things that make it feel like you.</p><button className="text-link text-link-light" onClick={() => openCake(displayedCakes[0])}>Start customizing <span>↗</span></button></div></div>
         </section>
 
         <section className="section testimonials-section">
