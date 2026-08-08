@@ -76,10 +76,15 @@ type OrderDetails = {
 };
 
 type CatalogueResponseCake = {
+  id: string;
   name: string;
   price: number;
   categories: Array<{ name: string }>;
+  variants: Array<{ id: string; name: string }>;
 };
+
+type StoredCartItem = { id: string; quantity: number; variantId: string; variantName: string; cakeName: string; customizations: unknown };
+type TrackedOrder = { status: string };
 
 const imageBase = "https://images.unsplash.com/";
 
@@ -415,6 +420,50 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    if (!order || !customer.email) return;
+    const controller = new AbortController();
+    const statusIndex: Record<string, number> = { PENDING_PAYMENT: 0, PAID: 0, CONFIRMED: 0, PREPARING: 1, READY_FOR_DISPATCH: 2, OUT_FOR_DELIVERY: 3, DELIVERED: 4, COMPLETED: 4 };
+
+    async function refreshTracking() {
+      try {
+        const response = await fetch(`/api/orders/${encodeURIComponent(order.number)}?email=${encodeURIComponent(customer.email)}`, { signal: controller.signal });
+        if (!response.ok) return;
+        const payload = await response.json() as { data?: TrackedOrder };
+        if (payload.data?.status && statusIndex[payload.data.status] !== undefined) {
+          setOrder((current) => current?.number === order.number ? { ...current, statusIndex: statusIndex[payload.data!.status] } : current);
+        }
+      } catch {
+        // The confirmation view remains available if tracking cannot be refreshed.
+      }
+    }
+
+    void refreshTracking();
+    return () => controller.abort();
+  }, [customer.email, order?.number]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function restoreCart() {
+      try {
+        const response = await fetch("/api/cart");
+        if (!response.ok) return;
+        const payload = await response.json() as { data?: { items?: StoredCartItem[] } };
+        if (!isMounted || !payload.data?.items) return;
+        setCartItems(payload.data.items.flatMap((item) => {
+          const cake = cakes.find((candidate) => candidate.name === item.cakeName);
+          if (!cake) return [];
+          const options = item.customizations && typeof item.customizations === "object" ? item.customizations as Record<string, unknown> : {};
+          return [{ id: item.id, cake, quantity: item.quantity, size: item.variantName, flavor: typeof options.flavor === "string" ? options.flavor : cake.flavors[0], shape: typeof options.shape === "string" ? options.shape : cake.shapes[0], theme: typeof options.theme === "string" ? options.theme : "Whipped cream", message: typeof options.message === "string" ? options.message : "", toppings: Array.isArray(options.toppings) ? options.toppings.filter((topping): topping is string => typeof topping === "string") : [], withCandles: options.withCandles === true, withCard: options.withCard === true }];
+        }));
+      } catch {
+        // The cart drawer remains usable when the persistence service is offline.
+      }
+    }
+    void restoreCart();
+    return () => { isMounted = false; };
+  }, []);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = darkMode ? "dark" : "light";
     window.localStorage.setItem("bite-bloom-theme", darkMode ? "dark" : "light");
   }, [darkMode]);
@@ -500,7 +549,7 @@ export default function HomePage() {
     setUploadName("");
   }
 
-  function addToCart() {
+  async function addToCart() {
     if (!selectedCake) return;
     const newItem: CartItem = {
       id: `${selectedCake.id}-${Date.now()}`,
@@ -516,6 +565,20 @@ export default function HomePage() {
       withCard,
     };
     setCartItems((items) => [...items, newItem]);
+    const serverCake = catalogueCakes[selectedCake.name];
+    const variant = serverCake?.variants.find((item) => item.name === selectedSize);
+    if (variant) {
+      const response = await fetch("/api/cart/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variantId: variant.id, quantity: 1, customizations: { flavor: selectedFlavor, shape: selectedShape, theme, message, toppings, withCandles, withCard } }),
+      }).catch(() => null);
+      if (response?.ok) {
+        const payload = await response.json() as { data?: { items?: StoredCartItem[] } };
+        const storedItem = payload.data?.items?.filter((item) => item.variantId === variant.id).at(-1);
+        if (storedItem) setCartItems((items) => items.map((item) => item.id === newItem.id ? { ...item, id: storedItem.id } : item));
+      }
+    }
     setSelectedCake(null);
     setCartOpen(true);
     showToast(`${selectedCake.name} is in your cart`);
@@ -523,16 +586,20 @@ export default function HomePage() {
 
   function updateQuantity(id: string, change: number) {
     setCartItems((items) => items.map((item) => item.id === id ? { ...item, quantity: Math.max(1, item.quantity + change) } : item));
+    const item = cartItems.find((candidate) => candidate.id === id);
+    if (item) void fetch(`/api/cart/items/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quantity: Math.max(1, item.quantity + change) }) });
   }
 
   function removeCartItem(id: string) {
     setCartItems((items) => items.filter((item) => item.id !== id));
+    void fetch(`/api/cart/items/${id}`, { method: "DELETE" });
     showToast("Item removed from your cart");
   }
 
   function saveCartItem(item: CartItem) {
     setSavedItems((items) => [...items, item]);
     setCartItems((items) => items.filter((current) => current.id !== item.id));
+    void fetch(`/api/cart/items/${item.id}`, { method: "DELETE" });
     showToast(`${item.cake.name} saved for later`);
   }
 
@@ -577,16 +644,29 @@ export default function HomePage() {
     setCheckoutStep("review");
   }
 
-  function placeOrder() {
-    const orderNumber = `BB-${Math.floor(1000 + Math.random() * 8999)}`;
+  async function placeOrder() {
+    const response = await fetch("/api/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: customer.name, email: customer.email, phone: customer.phone, fulfillmentType: deliveryMethod === "delivery" ? "DELIVERY" : "PICKUP", address: customer.address, notes: customer.notes }),
+    }).catch(() => null);
+    if (!response?.ok) {
+      showToast("We could not place your order. Please check your cart and try again.");
+      return;
+    }
+    const payload = await response.json() as { data?: { orderNumber: string; paymentInitiated?: boolean; paymentMessage?: string } };
+    if (!payload.data?.orderNumber) {
+      showToast("We could not confirm your order. Please try again.");
+      return;
+    }
     const dateLabel = scheduleMode === "schedule" && orderDate ? `${orderDate} · ${orderTime}` : deliveryMethod === "delivery" ? "Tomorrow · 10:00am – 12:00pm" : "Tomorrow · collection after 10:00am";
-    setOrder({ number: orderNumber, statusIndex: 0, method: deliveryMethod, dateLabel });
+    setOrder({ number: payload.data.orderNumber, statusIndex: 0, method: deliveryMethod, dateLabel });
     setCartItems([]);
     setAppliedCoupon("");
     setCouponCode("");
     setCheckoutOpen(false);
     setCheckoutStep("details");
-    showToast(`Order ${orderNumber} received — thank you`);
+    showToast(payload.data.paymentInitiated ? (payload.data.paymentMessage ?? "Check your phone to complete M-Pesa payment.") : (payload.data.paymentMessage ?? `Order ${payload.data.orderNumber} received — thank you`));
     window.setTimeout(() => document.getElementById("order-tracking")?.scrollIntoView({ behavior: "smooth" }), 100);
   }
 
