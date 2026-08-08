@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
@@ -50,6 +51,7 @@ export default function LoginPage() {
         <button className="button button-dark" type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Signing in…" : "Sign in"}
         </button>
+        <p>Need an account? <Link href="/register">Create one</Link></p>
       </form>
     </main>
   );

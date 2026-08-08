@@ -83,9 +83,9 @@ The following existing behaviours are demos and must be server-backed:
 | --- | --- |
 | Dashboard | Real metrics and charts with date-range query support. |
 | Cake management | Persisted create/read/update/archive actions, categories/variants/customizations, real image upload, publish state, and audit logs. |
-| Orders | Real order list/detail, permitted state transitions, staff assignment, order notes, print/export endpoint, refunds/cancellations. |
+| Orders | Protected order listing, state transitions, shipment creation/events, and persisted staff notes are available. Connect these controls to the admin screen; staff assignment, print/export, refunds, and customer cancellation flows remain. |
 | Delivery | Staff/courier records, shipment creation, driver assignment, delivery events, map/ETA provider integration. |
-| Customers | Paginated directory, customer detail/history, search/filter/export, privacy controls. |
+| Customers | Protected paginated directory and customer order-history APIs are available, including guest-checkout customers grouped by email. Connect the admin screen, add carefully scoped export and privacy/retention controls. |
 | Analytics | Server-generated metrics, date filtering, access restriction, export. |
 | Inventory | Variant/ingredient decision, stock adjustments with reason, reservations, low-stock alerts, purchase-order workflow if required. |
 | Reviews | Customer review creation, moderation, and public display. |
@@ -115,7 +115,7 @@ Implement these in the order below. The data models and workflow rules are alrea
 
 1. **Foundation (in progress)** — server-only environment access, Prisma client singleton, standard success/error response helpers, and `GET /api/health` are implemented. Add structured logging, schema validation, and feature API contracts.
 2. **Database delivery (in progress)** — `prisma/seed.ts` now provides idempotent development roles, permissions, a small catalogue, inventory, and an optional owner account. Generate and commit the initial migration from `prisma/schema.prisma`, then document database deployment/backup procedure.
-3. **Authentication and access control (in progress)** — Auth.js credentials login, bcrypt password comparison, JWT sessions, `/login`, and `/admin` role middleware are implemented. Registration/verification/reset flows, granular RBAC, ownership checks, audit logging, and secure staff invitations remain.
+3. **Authentication and access control (in progress)** — Auth.js credentials login, bcrypt password comparison, JWT sessions, `/login`, customer registration at `/register`, and `/admin` role middleware are implemented. Registration assigns the customer role and securely links prior guest orders with the same email. Email verification/reset flows, granular RBAC, broader ownership checks, and secure staff invitations remain.
 4. **Catalog (in progress)** — public `GET /api/cakes` returns active cake/variant/category data. Connect the storefront, add cake detail/category endpoints, media, customizations, and protected admin CRUD/archive endpoints.
 5. **Cart and checkout** — guest/session carts, server-side validation/calculation, coupons/promotions, delivery pricing/rules, inventory reservation transaction, immutable order snapshots, idempotency.
 6. **Payments (in progress)** — M-Pesa Daraja STK Push is implemented with server-side OAuth, a checkout request, and an idempotent callback that marks matching payments paid or releases reservations on failure. Cash on Delivery creates a confirmed order with a pending cash payment and opens a prefilled WhatsApp confirmation message. Configure Daraja sandbox/production credentials and public HTTPS callback URL, add payment-query/retry handling, and implement refunds/cancellations before launch.
