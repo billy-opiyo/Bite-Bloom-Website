@@ -8,11 +8,12 @@ import { getPrismaClient } from "./prisma";
 
 export const CART_COOKIE_NAME = "bite_bloom_cart";
 
-const cartInclude = {
+export const cartInclude = {
   items: {
     include: { variant: { include: { cake: true } } },
     orderBy: { createdAt: "asc" },
   },
+  appliedCoupons: { include: { coupon: true }, orderBy: { appliedAt: "asc" } },
 } satisfies Prisma.CartInclude;
 
 type CartWithItems = Prisma.CartGetPayload<{ include: typeof cartInclude }>;
@@ -22,6 +23,7 @@ export type CartSummary = {
   currency: string;
   items: Array<{ id: string; quantity: number; unitPrice: number; variantId: string; variantName: string; cakeName: string; cakeSlug: string; customizations: unknown }>;
   subtotal: number;
+  coupons: Array<{ code: string; description: string | null; discountType: "PERCENTAGE" | "FIXED_AMOUNT"; value: number; maximumDiscount: number | null }>;
 };
 
 export function serializeCart(cart: CartWithItems): CartSummary {
@@ -36,7 +38,13 @@ export function serializeCart(cart: CartWithItems): CartSummary {
     customizations: item.customizations,
   }));
 
-  return { id: cart.id, currency: cart.currency, items, subtotal: items.reduce((total, item) => total + item.quantity * item.unitPrice, 0) };
+  return {
+    id: cart.id,
+    currency: cart.currency,
+    items,
+    subtotal: items.reduce((total, item) => total + item.quantity * item.unitPrice, 0),
+    coupons: cart.appliedCoupons.map(({ coupon }) => ({ code: coupon.code, description: coupon.description, discountType: coupon.discountType, value: Number(coupon.value), maximumDiscount: coupon.maximumDiscount === null ? null : Number(coupon.maximumDiscount) })),
+  };
 }
 
 export async function getGuestCart(request: NextRequest): Promise<{ cart: CartWithItems; sessionToken: string; isNew: boolean }> {

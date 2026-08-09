@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 
 import { apiError, apiSuccess } from "../../../../../lib/server/api-response";
-import { getGuestCart, serializeCart, setCartCookie } from "../../../../../lib/server/cart";
+import { cartInclude, getGuestCart, serializeCart, setCartCookie } from "../../../../../lib/server/cart";
 import { hasDatabaseConfiguration } from "../../../../../lib/server/env";
 import { getPrismaClient } from "../../../../../lib/server/prisma";
 
@@ -24,7 +24,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const item = await getPrismaClient().cartItem.findFirst({ where: { id: params.id, cartId: cart.id }, select: { id: true } });
     if (!item) return apiError("VALIDATION_ERROR", "Cart item not found.", 404);
     await getPrismaClient().cartItem.update({ where: { id: item.id }, data: { quantity } });
-    const updatedCart = await getPrismaClient().cart.findUniqueOrThrow({ where: { id: cart.id }, include: { items: { include: { variant: { include: { cake: true } } }, orderBy: { createdAt: "asc" } } } });
+    const updatedCart = await getPrismaClient().cart.findUniqueOrThrow({ where: { id: cart.id }, include: cartInclude });
     return setCartCookie(apiSuccess(serializeCart(updatedCart)), sessionToken);
   } catch {
     return apiError("DATABASE_UNAVAILABLE", "The cart is temporarily unavailable.", 503);
@@ -38,7 +38,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     const item = await getPrismaClient().cartItem.findFirst({ where: { id: params.id, cartId: cart.id }, select: { id: true } });
     if (!item) return apiError("VALIDATION_ERROR", "Cart item not found.", 404);
     await getPrismaClient().cartItem.delete({ where: { id: item.id } });
-    const updatedCart = await getPrismaClient().cart.findUniqueOrThrow({ where: { id: cart.id }, include: { items: { include: { variant: { include: { cake: true } } }, orderBy: { createdAt: "asc" } } } });
+    const updatedCart = await getPrismaClient().cart.findUniqueOrThrow({ where: { id: cart.id }, include: cartInclude });
     return setCartCookie(apiSuccess(serializeCart(updatedCart)), sessionToken);
   } catch {
     return apiError("DATABASE_UNAVAILABLE", "The cart is temporarily unavailable.", 503);

@@ -84,6 +84,8 @@ type CatalogueResponseCake = {
 };
 
 type StoredCartItem = { id: string; quantity: number; variantId: string; variantName: string; cakeName: string; customizations: unknown };
+type StoredCoupon = { code: string; discountType: "PERCENTAGE" | "FIXED_AMOUNT"; value: number; maximumDiscount: number | null };
+type StoredWishlistItem = { cakeId: string; cake: { name: string } };
 type TrackedOrder = { status: string };
 
 const imageBase = "https://images.unsplash.com/";
@@ -389,7 +391,7 @@ export default function HomePage() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [couponCode, setCouponCode] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<StoredCoupon | null>(null);
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("delivery");
   const [paymentMethod, setPaymentMethod] = useState<"MPESA" | "CASH_ON_DELIVERY">("MPESA");
   const [scheduleMode, setScheduleMode] = useState<"next" | "schedule">("next");
@@ -448,8 +450,9 @@ export default function HomePage() {
       try {
         const response = await fetch("/api/cart");
         if (!response.ok) return;
-        const payload = await response.json() as { data?: { items?: StoredCartItem[] } };
+        const payload = await response.json() as { data?: { items?: StoredCartItem[]; coupons?: StoredCoupon[] } };
         if (!isMounted || !payload.data?.items) return;
+        setAppliedCoupon(payload.data.coupons?.[0] ?? null);
         setCartItems(payload.data.items.flatMap((item) => {
           const cake = cakes.find((candidate) => candidate.name === item.cakeName);
           if (!cake) return [];
@@ -495,6 +498,27 @@ export default function HomePage() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    if (Object.keys(catalogueCakes).length === 0) return;
+    const controller = new AbortController();
+    async function restoreWishlist() {
+      try {
+        const response = await fetch("/api/account/wishlist", { signal: controller.signal });
+        if (!response.ok) return;
+        const payload = await response.json() as { data?: StoredWishlistItem[] };
+        if (!payload.data) return;
+        setLikedCakes(payload.data.flatMap((item) => {
+          const cake = cakes.find((candidate) => candidate.name === item.cake.name);
+          return cake ? [cake.id] : [];
+        }));
+      } catch {
+        // Visitors can still browse cakes without an account wishlist.
+      }
+    }
+    void restoreWishlist();
+    return () => controller.abort();
+  }, [catalogueCakes]);
+
   const displayedCakes = useMemo(() => cakes.map((cake) => {
     const serverCake = catalogueCakes[cake.name];
     return serverCake
@@ -523,7 +547,7 @@ export default function HomePage() {
     (total, item) => total + getCustomizedPrice(item.cake, item.size, item.toppings, item.withCandles, item.withCard) * item.quantity,
     0,
   );
-  const couponDiscount = appliedCoupon === "SWEET10" ? Math.round(cartSubtotal * 0.1) : appliedCoupon === "BLOOM500" ? 500 : 0;
+  const couponDiscount = !appliedCoupon ? 0 : Math.min(cartSubtotal, Math.round(appliedCoupon.maximumDiscount === null ? (appliedCoupon.discountType === "PERCENTAGE" ? cartSubtotal * (appliedCoupon.value / 100) : appliedCoupon.value) : Math.min(appliedCoupon.discountType === "PERCENTAGE" ? cartSubtotal * (appliedCoupon.value / 100) : appliedCoupon.value, appliedCoupon.maximumDiscount)));
   const deliveryFee = deliveryMethod === "delivery" && cartItems.length ? (cartSubtotal >= 6000 ? 0 : 350) : 0;
   const cartTotal = Math.max(0, cartSubtotal + deliveryFee - couponDiscount);
 
@@ -610,16 +634,35 @@ export default function HomePage() {
     showToast(`${item.cake.name} moved back to your cart`);
   }
 
-  function applyCoupon(event: FormEvent<HTMLFormElement>) {
+  async function toggleWishlist(cake: Cake) {
+    const serverCake = catalogueCakes[cake.name];
+    if (!serverCake) return showToast("This cake is not available to save yet");
+    const wasLiked = likedCakes.includes(cake.id);
+    setLikedCakes((current) => wasLiked ? current.filter((id) => id !== cake.id) : [...current, cake.id]);
+    const response = await fetch(wasLiked ? `/api/account/wishlist/${encodeURIComponent(serverCake.id)}` : "/api/account/wishlist", {
+      method: wasLiked ? "DELETE" : "POST",
+      headers: wasLiked ? undefined : { "Content-Type": "application/json" },
+      ...(wasLiked ? {} : { body: JSON.stringify({ cakeId: serverCake.id }) }),
+    }).catch(() => null);
+    if (!response?.ok) {
+      setLikedCakes((current) => wasLiked ? [...current, cake.id] : current.filter((id) => id !== cake.id));
+      showToast(response?.status === 401 ? "Sign in to save your favorite cakes" : "Unable to update your wishlist right now");
+      return;
+    }
+    showToast(wasLiked ? `${cake.name} removed from favorites` : `${cake.name} saved to favorites`);
+  }
+
+  async function applyCoupon(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const code = couponCode.trim().toUpperCase();
-    if (code === "SWEET10" || code === "BLOOM500") {
-      setAppliedCoupon(code);
-      showToast(`${code} applied — a little more joy for less`);
-    } else {
-      setAppliedCoupon("");
-      showToast("Try SWEET10 or BLOOM500 for a welcome treat");
-    }
+    if (!code) return showToast("Enter a coupon code first");
+    const response = await fetch("/api/cart/coupons", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) }).catch(() => null);
+    const payload = await response?.json().catch(() => null) as { data?: { coupons?: StoredCoupon[] }; error?: { message?: string } } | null;
+    if (!response?.ok) return showToast(payload?.error?.message ?? "Unable to apply that coupon right now");
+    const coupon = payload?.data?.coupons?.[0] ?? null;
+    setAppliedCoupon(coupon);
+    setCouponCode("");
+    showToast(coupon ? `${coupon.code} applied — a little more joy for less` : "Coupon applied");
   }
 
   function openCheckout() {
@@ -677,7 +720,7 @@ export default function HomePage() {
     const dateLabel = scheduleMode === "schedule" && orderDate ? `${orderDate} · ${orderTime}` : deliveryMethod === "delivery" ? "Tomorrow · 10:00am – 12:00pm" : "Tomorrow · collection after 10:00am";
     setOrder({ number: payload.data.orderNumber, statusIndex: 0, method: deliveryMethod, dateLabel });
     setCartItems([]);
-    setAppliedCoupon("");
+    setAppliedCoupon(null);
     setCouponCode("");
     setCheckoutOpen(false);
     setCheckoutStep("details");
@@ -818,7 +861,7 @@ export default function HomePage() {
                 <div className="cake-image-wrap" onClick={() => openCake(cake)} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter") openCake(cake); }}>
                   <img src={cake.image} alt={cake.name} loading="lazy" />
                   <span className="cake-tag">{cake.tag}</span>
-                  <button className={`heart-button ${likedCakes.includes(cake.id) ? "liked" : ""}`} onClick={(event) => { event.stopPropagation(); setLikedCakes((current) => current.includes(cake.id) ? current.filter((id) => id !== cake.id) : [...current, cake.id]); }} aria-label={likedCakes.includes(cake.id) ? `Remove ${cake.name} from favorites` : `Add ${cake.name} to favorites`}><Icon name="heart" size={18} /></button>
+                  <button className={`heart-button ${likedCakes.includes(cake.id) ? "liked" : ""}`} onClick={(event) => { event.stopPropagation(); void toggleWishlist(cake); }} aria-label={likedCakes.includes(cake.id) ? `Remove ${cake.name} from favorites` : `Add ${cake.name} to favorites`}><Icon name="heart" size={18} /></button>
                   <span className="quick-view">Quick view <Icon name="arrow" size={14} /></span>
                 </div>
                 <div className="cake-card-body"><div className="cake-meta"><span>{cake.category}</span><span><Icon name="star" size={12} /> {cake.rating} ({cake.reviews})</span></div><h3>{cake.name}</h3><div className="cake-price-row"><strong>{formatPrice(cake.price)}</strong><button onClick={() => openCake(cake)}>Customize <Icon name="arrow" size={14} /></button></div></div>
@@ -850,7 +893,7 @@ export default function HomePage() {
 
       <footer className="site-footer"><div className="container footer-top"><div className="footer-brand"><a href="#top" className="brand"><span className="brand-mark"><Icon name="cake" size={24} /></span><span><strong>BITE <i>&</i> BLOOM</strong><small>CAKE STUDIO</small></span></a><p>A little more joy, one slice at a time.</p><div className="social-links"><a href="https://instagram.com" aria-label="Instagram"><Icon name="instagram" size={17} /></a><a href="https://facebook.com" aria-label="Facebook"><Icon name="facebook" size={17} /></a></div></div><div className="footer-column"><strong>Explore</strong><a href="#collection">Shop cakes</a><a href="#occasions">Occasions</a><a href="#our-story">Our story</a></div><div className="footer-column"><strong>Need to know</strong><a href="#delivery">Delivery areas</a><a href="#contact">FAQs</a><a href="#contact">Contact us</a><a className="footer-admin-link" href="/admin">Admin panel ↗</a></div><div className="newsletter"><strong>Get the good stuff</strong><p>Seasonal menus, early drops and a little sweetness in your inbox.</p><form onSubmit={(event) => { event.preventDefault(); showToast("You are on the sweet list ✦"); }}><label className="sr-only" htmlFor="newsletter-email">Email address</label><input id="newsletter-email" type="email" required placeholder="Your email address" /><button type="submit" aria-label="Subscribe"><Icon name="arrow" size={17} /></button></form></div></div><div className="container footer-bottom"><span>© {new Date().getFullYear()} Bite & Bloom. Made with care in Nairobi.</span><span>Privacy · Terms · <a href="#top">Back to top ↑</a></span></div></footer>
 
-      {cartOpen && <div className="drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false); }}><aside className="cart-drawer" role="dialog" aria-modal="true" aria-labelledby="cart-title"><div className="drawer-header"><div><p className="eyebrow">Your sweet selection</p><h2 id="cart-title">Your cart <em>({cartCount})</em></h2></div><button className="modal-close" onClick={() => setCartOpen(false)} aria-label="Close cart"><Icon name="close" size={19} /></button></div>{cartItems.length ? <><div className="drawer-items">{cartItems.map((item) => <div className="drawer-item" key={item.id}><img src={item.cake.image} alt={item.cake.name} /><div className="drawer-item-info"><div className="drawer-item-title"><strong>{item.cake.name}</strong><button onClick={() => removeCartItem(item.id)} aria-label={`Remove ${item.cake.name}`}>&times;</button></div><small>{item.size} · {item.flavor} · {item.shape}</small><small>{item.message ? `Message: “${item.message}”` : item.theme}</small><div className="drawer-item-bottom"><div className="quantity-control"><button onClick={() => updateQuantity(item.id, -1)} aria-label="Decrease quantity">−</button><b>{item.quantity}</b><button onClick={() => updateQuantity(item.id, 1)} aria-label="Increase quantity">+</button></div><strong>{formatPrice(getCustomizedPrice(item.cake, item.size, item.toppings, item.withCandles, item.withCard) * item.quantity)}</strong></div><button className="save-button" onClick={() => saveCartItem(item)}>♡ Save for later</button></div></div>)}</div>{savedItems.length > 0 && <div className="saved-items"><div className="drawer-subheading"><strong>Saved for later</strong><span>{savedItems.length} item{savedItems.length > 1 ? "s" : ""}</span></div>{savedItems.map((item) => <div className="saved-item" key={item.id}><span>{item.cake.name}</span><button onClick={() => moveSavedToCart(item)}>Move to cart</button></div>)}</div>}<form className="coupon-form" onSubmit={applyCoupon}><label htmlFor="coupon-code">Have a code?</label><div><input id="coupon-code" value={couponCode} onChange={(event) => setCouponCode(event.target.value)} placeholder="SWEET10" /><button type="submit">Apply</button></div>{appliedCoupon && <small>{appliedCoupon} applied · {couponDiscount ? `${formatPrice(couponDiscount)} saved` : "discount added"}</small>}</form><div className="cart-summary"><div><span>Subtotal</span><strong>{formatPrice(cartSubtotal)}</strong></div><div><span>Delivery fee <small>{deliveryMethod === "pickup" ? "(pickup)" : cartSubtotal >= 6000 ? "(free over KSh 6,000)" : "(Nairobi)"}</small></span><strong>{deliveryFee ? formatPrice(deliveryFee) : "Free"}</strong></div>{couponDiscount > 0 && <div className="discount-row"><span>Discount</span><strong>− {formatPrice(couponDiscount)}</strong></div>}<div className="estimated-total"><span>Estimated total</span><strong>{formatPrice(cartTotal)}</strong></div></div><button className="button button-dark checkout-button" onClick={openCheckout}>Continue to checkout <Icon name="arrow" size={16} /></button><p className="secure-note"><Icon name="check" size={13} /> You can choose delivery or pickup at checkout</p></> : <div className="empty-cart"><span className="empty-cart-icon"><Icon name="cake" size={29} /></span><h3>Your cart is feeling light.</h3><p>Choose something lovely and we&apos;ll keep it safe here.</p><button className="button button-dark" onClick={() => { setCartOpen(false); scrollToCollection(); }}>Browse cakes <Icon name="arrow" size={15} /></button>{savedItems.length > 0 && <div className="saved-empty"><strong>Saved for later · {savedItems.length}</strong>{savedItems.map((item) => <button key={item.id} onClick={() => moveSavedToCart(item)}>{item.cake.name} <span>Move to cart →</span></button>)}</div>}</div>}</aside></div>}
+      {cartOpen && <div className="drawer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false); }}><aside className="cart-drawer" role="dialog" aria-modal="true" aria-labelledby="cart-title"><div className="drawer-header"><div><p className="eyebrow">Your sweet selection</p><h2 id="cart-title">Your cart <em>({cartCount})</em></h2></div><button className="modal-close" onClick={() => setCartOpen(false)} aria-label="Close cart"><Icon name="close" size={19} /></button></div>{cartItems.length ? <><div className="drawer-items">{cartItems.map((item) => <div className="drawer-item" key={item.id}><img src={item.cake.image} alt={item.cake.name} /><div className="drawer-item-info"><div className="drawer-item-title"><strong>{item.cake.name}</strong><button onClick={() => removeCartItem(item.id)} aria-label={`Remove ${item.cake.name}`}>&times;</button></div><small>{item.size} · {item.flavor} · {item.shape}</small><small>{item.message ? `Message: “${item.message}”` : item.theme}</small><div className="drawer-item-bottom"><div className="quantity-control"><button onClick={() => updateQuantity(item.id, -1)} aria-label="Decrease quantity">−</button><b>{item.quantity}</b><button onClick={() => updateQuantity(item.id, 1)} aria-label="Increase quantity">+</button></div><strong>{formatPrice(getCustomizedPrice(item.cake, item.size, item.toppings, item.withCandles, item.withCard) * item.quantity)}</strong></div><button className="save-button" onClick={() => saveCartItem(item)}>♡ Save for later</button></div></div>)}</div>{savedItems.length > 0 && <div className="saved-items"><div className="drawer-subheading"><strong>Saved for later</strong><span>{savedItems.length} item{savedItems.length > 1 ? "s" : ""}</span></div>{savedItems.map((item) => <div className="saved-item" key={item.id}><span>{item.cake.name}</span><button onClick={() => moveSavedToCart(item)}>Move to cart</button></div>)}</div>}<form className="coupon-form" onSubmit={applyCoupon}><label htmlFor="coupon-code">Have a code?</label><div><input id="coupon-code" value={couponCode} onChange={(event) => setCouponCode(event.target.value)} placeholder="SWEET10" /><button type="submit">Apply</button></div>{appliedCoupon && <small>{appliedCoupon.code} applied · {couponDiscount ? `${formatPrice(couponDiscount)} saved` : "discount added"}</small>}</form><div className="cart-summary"><div><span>Subtotal</span><strong>{formatPrice(cartSubtotal)}</strong></div><div><span>Delivery fee <small>{deliveryMethod === "pickup" ? "(pickup)" : cartSubtotal >= 6000 ? "(free over KSh 6,000)" : "(Nairobi)"}</small></span><strong>{deliveryFee ? formatPrice(deliveryFee) : "Free"}</strong></div>{couponDiscount > 0 && <div className="discount-row"><span>Discount</span><strong>− {formatPrice(couponDiscount)}</strong></div>}<div className="estimated-total"><span>Estimated total</span><strong>{formatPrice(cartTotal)}</strong></div></div><button className="button button-dark checkout-button" onClick={openCheckout}>Continue to checkout <Icon name="arrow" size={16} /></button><p className="secure-note"><Icon name="check" size={13} /> You can choose delivery or pickup at checkout</p></> : <div className="empty-cart"><span className="empty-cart-icon"><Icon name="cake" size={29} /></span><h3>Your cart is feeling light.</h3><p>Choose something lovely and we&apos;ll keep it safe here.</p><button className="button button-dark" onClick={() => { setCartOpen(false); scrollToCollection(); }}>Browse cakes <Icon name="arrow" size={15} /></button>{savedItems.length > 0 && <div className="saved-empty"><strong>Saved for later · {savedItems.length}</strong>{savedItems.map((item) => <button key={item.id} onClick={() => moveSavedToCart(item)}>{item.cake.name} <span>Move to cart →</span></button>)}</div>}</div>}</aside></div>}
 
       {checkoutOpen && <div className="modal-backdrop checkout-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCheckoutOpen(false); }}><div className="checkout-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title"><button className="modal-close" onClick={() => setCheckoutOpen(false)} aria-label="Close checkout"><Icon name="close" size={20} /></button><div className="checkout-main"><div className="checkout-topline"><span>Checkout · {checkoutStep === "details" ? "1 of 2" : "2 of 2"}</span><div><b className={checkoutStep === "details" ? "active" : "done"}>1</b><i /><b className={checkoutStep === "review" ? "active" : ""}>2</b></div></div>{checkoutStep === "details" ? <form onSubmit={reviewCheckout}><h2 id="checkout-title">Let&apos;s get you <em>sorted.</em></h2><p className="checkout-intro">A few details, then we&apos;ll take care of the rest.</p><div className="checkout-section"><div className="checkout-section-heading"><strong>Your details</strong><span>Required</span></div><div className="form-row"><label><span>Full name</span><input required value={customer.name} onChange={(event) => setCustomer({ ...customer, name: event.target.value })} placeholder="Amina Otieno" /></label><label><span>Phone number</span><input required type="tel" value={customer.phone} onChange={(event) => setCustomer({ ...customer, phone: event.target.value })} placeholder="0711 222 333" /></label></div><label><span>Email address</span><input required type="email" value={customer.email} onChange={(event) => setCustomer({ ...customer, email: event.target.value })} placeholder="amina@example.com" /></label></div><div className="checkout-section"><div className="checkout-section-heading"><strong>How would you like it?</strong><span>Choose one</span></div><div className="delivery-choice-grid"><button type="button" className={deliveryMethod === "delivery" ? "selected" : ""} onClick={() => setDeliveryMethod("delivery")}><Icon name="truck" size={19} /><span><strong>Home delivery</strong><small>From KSh 300 · Nairobi</small></span></button><button type="button" className={deliveryMethod === "pickup" ? "selected" : ""} onClick={() => setDeliveryMethod("pickup")}><Icon name="pin" size={19} /><span><strong>Pick up from shop</strong><small>13 Riverside Lane, Kilimani</small></span></button></div>{deliveryMethod === "delivery" ? <label><span>Delivery address</span><input required value={customer.address} onChange={(event) => setCustomer({ ...customer, address: event.target.value })} placeholder="Building, street and area" /></label> : <div className="pickup-note"><Icon name="pin" size={17} /><span><strong>Studio collection</strong><small>13 Riverside Lane, Kilimani · We&apos;ll have it ready for you.</small></span></div>}</div><div className="checkout-section"><div className="checkout-section-heading"><strong>When should we make it?</strong><span>Plan ahead</span></div><div className="schedule-choice"><label className={scheduleMode === "next" ? "selected" : ""}><input type="radio" checked={scheduleMode === "next"} onChange={() => setScheduleMode("next")} />{deliveryMethod === "delivery" ? "Next available · Tomorrow" : "Next available · Tomorrow"}<small>{deliveryMethod === "delivery" ? "10:00am – 12:00pm" : "Collection after 10:00am"}</small></label><label className={scheduleMode === "schedule" ? "selected" : ""}><input type="radio" checked={scheduleMode === "schedule"} onChange={() => setScheduleMode("schedule")} />Schedule a future order{scheduleMode === "schedule" && <><input type="date" min={minOrderDate} value={orderDate} onChange={(event) => setOrderDate(event.target.value)} /><select value={orderTime} onChange={(event) => setOrderTime(event.target.value)}><option>10:00am – 12:00pm</option><option>12:00pm – 2:00pm</option><option>3:00pm – 5:00pm</option></select></>}</label></div></div><label className="checkout-notes"><span>Order notes <small>Optional</small></span><textarea value={customer.notes} onChange={(event) => setCustomer({ ...customer, notes: event.target.value })} placeholder="Gate code, delivery note or anything else we should know" /></label><button className="button button-dark checkout-next" type="submit">Review your order <Icon name="arrow" size={16} /></button></form> : <div className="review-step"><h2 id="checkout-title">Ready to make it <em>official?</em></h2><p className="checkout-intro">Everything looks good. We&apos;ll confirm your order by phone and email.</p><div className="review-card"><div><span>Customer</span><strong>{customer.name}</strong><small>{customer.phone} · {customer.email}</small></div><div><span>{deliveryMethod === "delivery" ? "Deliver to" : "Pickup from"}</span><strong>{deliveryMethod === "delivery" ? customer.address : "Bite & Bloom studio"}</strong><small>{orderDate && scheduleMode === "schedule" ? `${orderDate} · ${orderTime}` : "Tomorrow · next available slot"}</small></div></div><div className="review-items">{cartItems.map((item) => <div key={item.id}><span>{item.quantity} × {item.cake.name}<small>{item.size} · {item.flavor}</small></span><strong>{formatPrice(getCustomizedPrice(item.cake, item.size, item.toppings, item.withCandles, item.withCard) * item.quantity)}</strong></div>)}</div><div className="review-total"><span>Estimated total</span><strong>{formatPrice(cartTotal)}</strong></div><div className="review-actions"><button className="button button-outline" onClick={() => setCheckoutStep("details")}>Back</button><button className="button button-dark" onClick={placeOrder}>Place order <Icon name="check" size={16} /></button></div></div>}</div><aside className="checkout-aside"><p className="eyebrow">A little preview</p><h3>Your order <em>so far.</em></h3><div className="checkout-aside-items">{cartItems.map((item) => <div key={item.id}><img src={item.cake.image} alt="" /><span>{item.quantity} × {item.cake.name}<small>{item.size} · {item.flavor}</small></span><strong>{formatPrice(getCustomizedPrice(item.cake, item.size, item.toppings, item.withCandles, item.withCard) * item.quantity)}</strong></div>)}</div><div className="checkout-aside-total"><span>Subtotal</span><strong>{formatPrice(cartSubtotal)}</strong><span>Delivery</span><strong>{deliveryFee ? formatPrice(deliveryFee) : "Free"}</strong><span>Total</span><strong>{formatPrice(cartTotal)}</strong></div><p className="checkout-aside-note"><Icon name="leaf" size={14} /> No payment is taken here. We&apos;ll contact you to confirm.</p></aside></div></div>}
 

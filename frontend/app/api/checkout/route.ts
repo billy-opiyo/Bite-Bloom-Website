@@ -3,7 +3,9 @@ import { Prisma } from "@prisma/client";
 import { type NextRequest } from "next/server";
 
 import { apiError, apiSuccess } from "../../../lib/server/api-response";
+import { getAuthenticatedSession } from "../../../lib/server/access";
 import { getGuestCart } from "../../../lib/server/cart";
+import { couponDiscount, couponIsActive } from "../../../lib/server/coupons";
 import { hasDatabaseConfiguration } from "../../../lib/server/env";
 import { hasMpesaConfiguration, initiateStkPush, normalizeMpesaPhone } from "../../../lib/server/mpesa";
 import { getPrismaClient } from "../../../lib/server/prisma";
@@ -40,11 +42,12 @@ export async function POST(request: NextRequest) {
   if (input.paymentMethod === "MPESA" && !normalizeMpesaPhone(input.phone)) return apiError("VALIDATION_ERROR", "Enter a valid Kenyan M-Pesa phone number.", 400);
 
   try {
+    const session = await getAuthenticatedSession();
     const { cart } = await getGuestCart(request);
     const order = await getPrismaClient().$transaction(async (tx) => {
       const freshCart = await tx.cart.findFirst({
         where: { id: cart.id, status: "ACTIVE" },
-        include: { items: { include: { variant: { include: { cake: true, inventoryItem: true } } }, orderBy: { createdAt: "asc" } } },
+        include: { items: { include: { variant: { include: { cake: true, inventoryItem: true } } }, orderBy: { createdAt: "asc" } }, appliedCoupons: { include: { coupon: true } } },
       });
       if (!freshCart || freshCart.items.length === 0) throw new CheckoutError(400, "Your cart is empty or has already been checked out.");
 
@@ -57,13 +60,27 @@ export async function POST(request: NextRequest) {
         subtotal += Number(item.variant.price) * item.quantity;
       }
 
+      if (freshCart.appliedCoupons.length > 1) throw new CheckoutError(400, "Only one coupon can be used per order.");
+      const appliedCoupon = freshCart.appliedCoupons[0]?.coupon;
+      let discountTotal = 0;
+      if (appliedCoupon) {
+        if (!couponIsActive(appliedCoupon)) throw new CheckoutError(400, "Your coupon is no longer active.");
+        const discount = couponDiscount(appliedCoupon, subtotal);
+        if (discount === null) throw new CheckoutError(400, "Your coupon does not apply to this order total.");
+        if (appliedCoupon.perUserLimit !== null && session) {
+          const redemptions = await tx.couponRedemption.count({ where: { couponId: appliedCoupon.id, userId: session.user.id } });
+          if (redemptions >= appliedCoupon.perUserLimit) throw new CheckoutError(400, "You have already used this coupon the maximum number of times.");
+        }
+        discountTotal = discount;
+      }
+
       const deliveryFee = input.fulfillmentType === "DELIVERY" ? (subtotal >= 6000 ? 0 : 350) : 0;
-      const total = subtotal + deliveryFee;
+      const total = subtotal + deliveryFee - discountTotal;
       const initialStatus = input.paymentMethod === "CASH_ON_DELIVERY" ? "CONFIRMED" : "PENDING_PAYMENT";
       const order = await tx.order.create({
         data: {
           orderNumber: orderNumber(), email: input.email, phone: input.phone, fulfillmentType: input.fulfillmentType,
-          status: initialStatus, subtotal, deliveryFee, total, notes: input.notes,
+          ...(session ? { user: { connect: { id: session.user.id } } } : {}), status: initialStatus, subtotal, discountTotal, deliveryFee, total, notes: input.notes,
           cart: { connect: { id: freshCart.id } },
           items: { create: freshCart.items.map((item) => ({ cakeName: item.variant.cake.name, variantName: item.variant.name, sku: item.variant.sku, quantity: item.quantity, unitPrice: item.variant.price, lineTotal: Number(item.variant.price) * item.quantity, customizations: item.customizations as Prisma.InputJsonValue | undefined, cake: { connect: { id: item.variant.cakeId } }, variant: { connect: { id: item.variantId } } })) },
           addresses: { create: { type: "SHIPPING", recipientName: input.name, line1: input.fulfillmentType === "DELIVERY" ? input.address! : "Bite & Bloom studio collection", city: "Nairobi", country: "KE", phone: input.phone } },
@@ -71,6 +88,16 @@ export async function POST(request: NextRequest) {
           statusHistory: { create: { toStatus: initialStatus, reason: input.paymentMethod === "MPESA" ? "Order submitted" : "Cash on delivery order submitted" } },
         }, include: { payments: true },
       });
+
+      if (appliedCoupon) {
+        if (appliedCoupon.usageLimit !== null) {
+          const claimed = await tx.coupon.updateMany({ where: { id: appliedCoupon.id, usageCount: { lt: appliedCoupon.usageLimit } }, data: { usageCount: { increment: 1 } } });
+          if (claimed.count !== 1) throw new CheckoutError(400, "This coupon has reached its usage limit.");
+        } else {
+          await tx.coupon.update({ where: { id: appliedCoupon.id }, data: { usageCount: { increment: 1 } } });
+        }
+        await tx.couponRedemption.create({ data: { couponId: appliedCoupon.id, orderId: order.id, ...(session ? { userId: session.user.id } : {}), amount: discountTotal } });
+      }
 
       for (const item of freshCart.items) {
         const inventory = item.variant.inventoryItem!;

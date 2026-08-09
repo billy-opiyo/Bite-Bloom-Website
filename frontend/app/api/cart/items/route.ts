@@ -2,7 +2,7 @@ import { type NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 
 import { apiError, apiSuccess } from "../../../../lib/server/api-response";
-import { getGuestCart, serializeCart, setCartCookie } from "../../../../lib/server/cart";
+import { cartInclude, getGuestCart, serializeCart, setCartCookie } from "../../../../lib/server/cart";
 import { hasDatabaseConfiguration } from "../../../../lib/server/env";
 import { getPrismaClient } from "../../../../lib/server/prisma";
 
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const variant = await getPrismaClient().cakeVariant.findFirst({ where: { id: input.variantId, isActive: true, cake: { status: "ACTIVE" } }, select: { id: true, price: true } });
     if (!variant) return apiError("VALIDATION_ERROR", "This cake option is not available.", 400);
     await getPrismaClient().cartItem.create({ data: { cart: { connect: { id: cart.id } }, variant: { connect: { id: variant.id } }, quantity: input.quantity, unitPrice: variant.price, ...(input.customizations ? { customizations: input.customizations as Prisma.InputJsonValue } : {}) } });
-    const updatedCart = await getPrismaClient().cart.findUniqueOrThrow({ where: { id: cart.id }, include: { items: { include: { variant: { include: { cake: true } } }, orderBy: { createdAt: "asc" } } } });
+    const updatedCart = await getPrismaClient().cart.findUniqueOrThrow({ where: { id: cart.id }, include: cartInclude });
     return setCartCookie(apiSuccess(serializeCart(updatedCart), { status: 201 }), sessionToken);
   } catch {
     return apiError("DATABASE_UNAVAILABLE", "The cart is temporarily unavailable.", 503);

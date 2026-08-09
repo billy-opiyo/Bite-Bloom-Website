@@ -20,7 +20,7 @@ The Prisma schema is a strong design baseline for a complete cake-commerce syste
 | --- | --- | --- |
 | Next.js app shell | Present | Root layout, global CSS, loading state, and 404 page exist. |
 | Public home/storefront UI | Partially connected | Catalog browsing, search/filter/sort, cake details/customization modal, cart drawer, checkout modal, tracking section, FAQ, contact, and dark-mode UI are in one page file. Catalogue pricing/categories hydrate from the public API when available. |
-| Admin UI | Partially connected | The cake list hydrates from the protected API and adding a cake persists through it; remaining tabs and existing-cake edits are still local prototype interactions. |
+| Admin UI | Partially connected | Cake management and review moderation hydrate protected APIs; cake edits and review publish/reject actions persist. Remaining tabs still contain prototype interactions. |
 | Styling | Present | `frontend/app/globals.css` contains the actual styling. |
 | Prisma schema | Present | Models cover identity/RBAC, catalog, cart/orders/payments, inventory, delivery, media, notifications, analytics, loyalty, and audit logs. |
 | Server foundation | Present | Server-only environment/Prisma helpers, health check, public cake list/detail APIs, protected admin cake list/create APIs, and Auth.js credentials endpoints are available. |
@@ -56,7 +56,7 @@ The following route folders exist but contain no page files. The home page curre
 | --- | --- |
 | `(public)` | About, cake catalogue, cake detail, cart, categories, checkout, contact, FAQ, offers, reviews, and order tracking. |
 | `(auth)` | Login, registration, forgot-password, reset-password, email verification. |
-| `account` | Authenticated profile, saved-address, and customer-owned order-history APIs are available. Add account pages/UI, order detail route, wishlist, and loyalty UI. |
+| `account` | An authenticated `/account` page now lets customers view/update their profile, save addresses, view recent orders, and manage wishlist items using protected APIs. Customer-owned order-detail/tracking pages are also available. Add dedicated loyalty UI. |
 | `admin` | Prefer nested protected routes for dashboard, catalog, orders, delivery, customers, analytics, inventory, reviews, and staff rather than one stateful page. |
 
 ### 3. Replace browser-only storefront behaviour
@@ -117,7 +117,7 @@ Implement these in the order below. The data models and workflow rules are alrea
 2. **Database delivery (in progress)** — `prisma/seed.ts` now provides idempotent development roles, permissions, a small catalogue, inventory, and an optional owner account. Generate and commit the initial migration from `prisma/schema.prisma`, then document database deployment/backup procedure.
 3. **Authentication and access control (in progress)** — Auth.js credentials login, bcrypt password comparison, JWT sessions, `/login`, customer registration at `/register`, and `/admin` role middleware are implemented. Registration assigns the customer role and securely links prior guest orders with the same email. Email verification/reset flows, granular RBAC, broader ownership checks, and secure staff invitations remain.
 4. **Catalog (in progress)** — public `GET /api/cakes` returns active cake/variant/category data. Connect the storefront, add cake detail/category endpoints, media, customizations, and protected admin CRUD/archive endpoints.
-5. **Cart and checkout** — guest/session carts, server-side validation/calculation, coupons/promotions, delivery pricing/rules, inventory reservation transaction, immutable order snapshots, idempotency.
+5. **Cart and checkout (in progress)** — guest carts, server-side validation/calculation, one active coupon per cart, coupon-limit/redemption enforcement, delivery pricing, inventory reservation transactions, and immutable order snapshots are implemented. Connect the coupon API to the storefront, add promotions/customization price enforcement, session-cart merge, and checkout idempotency.
 6. **Payments (in progress)** — M-Pesa Daraja STK Push is implemented with server-side OAuth, a checkout request, and an idempotent callback that marks matching payments paid or releases reservations on failure. Cash on Delivery creates a confirmed order with a pending cash payment and opens a prefilled WhatsApp confirmation message. Configure Daraja sandbox/production credentials and public HTTPS callback URL, add payment-query/retry handling, and implement refunds/cancellations before launch.
 7. **Order operations (in progress)** — customer order tracking plus protected admin order listing/status transitions are implemented. The transition service consumes reservations when production begins, releases them on cancellation/failure, and settles pending cash payment at delivery. Connect the admin orders screen, add notes, shipments/courier assignment, invoices, and exports.
 8. **Inventory and fulfilment (in progress)** — protected inventory list/adjustment APIs create audited stock movements and prevent adjustments below active reservations. Shipment creation/events are available. The protected reservation-expiry job releases abandoned holds in bounded batches. Connect remaining admin controls, schedule the job, automate low-stock notifications, and integrate a courier if required.
