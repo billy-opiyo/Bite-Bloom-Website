@@ -5,6 +5,11 @@ export const metadata: Metadata = {
   title: "Bite & Bloom — Cakes made for your moment",
   description:
     "Thoughtful cakes, baked fresh and delivered across Nairobi for every kind of celebration.",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
