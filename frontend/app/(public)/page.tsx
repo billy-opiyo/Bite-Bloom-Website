@@ -27,7 +27,8 @@ type IconName =
   | "sun"
   | "truck"
   | "upload"
-  | "user";
+  | "user"
+  | "whatsapp";
 
 type Cake = {
   id: number;
@@ -353,6 +354,7 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
     truck: <><path d="M3 6h11v10H3z" /><path d="M14 10h4l3 3v3h-7z" /><circle cx="7" cy="18" r="1.7" /><circle cx="18" cy="18" r="1.7" /></>,
     upload: <><path d="M12 16V4" /><path d="m7 9 5-5 5 5" /><path d="M5 20h14" /></>,
     user: <><circle cx="12" cy="8" r="3.5" /><path d="M5 20c.7-3.4 3-5 7-5s6.3 1.6 7 5" /></>,
+    whatsapp: <path fill="currentColor" stroke="none" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.5-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1.1-1.4-1.1-2.7s.7-1.9.9-2.2c.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.4l.8 2c.1.2.1.4 0 .6l-.4.6-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1.1 2.2 1.4 2.5 1.5.3.1.5.1.7-.1l1-1.2c.2-.3.4-.2.7-.1l2 1c.3.1.5.2.6.4 0 .1 0 .7-.2 1.3Z" />,
   };
 
   return <svg {...common}>{paths[name]}</svg>;
@@ -412,6 +414,7 @@ export default function HomePage() {
   const [withCard, setWithCard] = useState(false);
   const [uploadName, setUploadName] = useState("");
   const [catalogueCakes, setCatalogueCakes] = useState<Record<string, CatalogueResponseCake>>({});
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const cartCount = cartItems.reduce((count, item) => count + item.quantity, 0);
 
   useEffect(() => {
@@ -478,6 +481,15 @@ export default function HomePage() {
       document.body.style.overflow = "";
     };
   }, [selectedCake, cartOpen, checkoutOpen, accountOpen]);
+
+  useEffect(() => {
+    function handleScroll() {
+      setShowBackToTop(window.scrollY > 300);
+    }
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -750,6 +762,10 @@ export default function HomePage() {
     setMenuOpen(false);
   }
 
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function toggleTopping(topping: string) {
     setToppings((current) =>
       current.includes(topping) ? current.filter((item) => item !== topping) : [...current, topping],
@@ -901,6 +917,17 @@ export default function HomePage() {
 
       {selectedCake && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedCake(null); }}><div className="product-modal" role="dialog" aria-modal="true" aria-labelledby="product-title"><button className="modal-close" onClick={() => setSelectedCake(null)} aria-label="Close product details"><Icon name="close" size={20} /></button><div className="product-gallery"><div className="product-main-image image-sheen"><img src={selectedCake.images[activeImage]} alt={selectedCake.name} /></div><div className="product-thumbnails">{selectedCake.images.map((image, index) => <button key={image} className={activeImage === index ? "active" : ""} onClick={() => setActiveImage(index)}><img src={image} alt={`${selectedCake.name} view ${index + 1}`} /></button>)}</div></div><div className="product-details"><div className="product-kicker"><span>{selectedCake.category}</span><span><Icon name="star" size={13} /> {selectedCake.rating} · {selectedCake.reviews} reviews</span></div><h2 id="product-title">{selectedCake.name}</h2><p className="product-description">{selectedCake.description}</p><strong className="product-price">From {formatPrice(selectedCake.price)}</strong><div className="customizer"><div className="customizer-section"><div className="customizer-label"><strong>Choose a size</strong><span>Required</span></div><div className="option-grid option-grid-3">{["0.5 kg", "1 kg", "2 kg"].map((size) => <button key={size} className={selectedSize === size ? "selected" : ""} onClick={() => setSelectedSize(size)}>{size}</button>)}</div></div><div className="customizer-section"><div className="customizer-label"><strong>Pick a flavor</strong><span>Required</span></div><div className="option-grid">{selectedCake.flavors.map((flavor) => <button key={flavor} className={selectedFlavor === flavor ? "selected" : ""} onClick={() => setSelectedFlavor(flavor)}>{flavor}</button>)}</div></div><div className="customizer-two-col"><div className="customizer-section"><div className="customizer-label"><strong>Shape</strong></div><div className="option-grid">{selectedCake.shapes.map((shape) => <button key={shape} className={selectedShape === shape ? "selected" : ""} onClick={() => setSelectedShape(shape)}>{shape}</button>)}</div></div><div className="customizer-section"><div className="customizer-label"><strong>Finish</strong></div><select className="select-control" value={theme} onChange={(event) => setTheme(event.target.value)}><option>Whipped cream</option><option>Buttercream</option><option>Naked finish</option><option>Chocolate ganache</option></select></div></div><div className="customizer-section"><div className="customizer-label"><strong>Your message</strong><span>Optional</span></div><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="e.g. Happy birthday, Amara!" maxLength={80} /><small className="field-hint">{message.length}/80 characters</small></div><div className="customizer-section"><div className="customizer-label"><strong>Make it yours</strong><span>Optional extras</span></div><div className="extra-grid">{["Fresh fruit", "Edible flowers", "Chocolate curls", "Macarons"].map((topping) => <button key={topping} className={toppings.includes(topping) ? "selected" : ""} onClick={() => toggleTopping(topping)}><span className="extra-check">{toppings.includes(topping) && <Icon name="check" size={13} />}</span>{topping}</button>)}</div><label className="upload-control"><Icon name="upload" size={17} /><span><strong>{uploadName || "Upload inspiration image"}</strong><small>{uploadName ? "Ready to share with our baker" : "JPG or PNG · up to 5MB"}</small></span><input type="file" accept="image/png,image/jpeg" onChange={(event) => setUploadName(event.target.files?.[0]?.name ?? "")} /></label><div className="toggle-options"><label><input type="checkbox" checked={withCandles} onChange={(event) => setWithCandles(event.target.checked)} /><span className="fake-toggle" />Add candles <b>+ KSh 250</b></label><label><input type="checkbox" checked={withCard} onChange={(event) => setWithCard(event.target.checked)} /><span className="fake-toggle" />Add a greeting card <b>+ KSh 350</b></label></div></div></div><div className="add-cart-row"><div><small>Total from</small><strong>{formatPrice(customizationPrice)}</strong></div><button className="button button-dark" onClick={addToCart}>Add to cart <Icon name="cart" size={17} /></button></div><p className="allergen-note"><Icon name="leaf" size={14} /> {selectedCake.ingredients} <br /><span>Allergen note: {selectedCake.allergens}</span></p></div></div></div>}
       {toast && <div className="toast" role="status"><span><Icon name="check" size={16} /></span>{toast}</div>}
+
+      <a className="whatsapp-float" href={`https://wa.me/254711222333?text=${encodeURIComponent(whatsappMessage)}`} target="_blank" rel="noreferrer" aria-label="Chat with us on WhatsApp">
+        <Icon name="whatsapp" size={24} />
+        <span className="whatsapp-float-label">Chat with us</span>
+      </a>
+
+      {showBackToTop && (
+        <button className="back-to-top" onClick={scrollToTop} aria-label="Back to top">
+          <Icon name="arrow" size={20} />
+        </button>
+      )}
     </div>
   );
 }
