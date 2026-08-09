@@ -354,7 +354,7 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
     truck: <><path d="M3 6h11v10H3z" /><path d="M14 10h4l3 3v3h-7z" /><circle cx="7" cy="18" r="1.7" /><circle cx="18" cy="18" r="1.7" /></>,
     upload: <><path d="M12 16V4" /><path d="m7 9 5-5 5 5" /><path d="M5 20h14" /></>,
     user: <><circle cx="12" cy="8" r="3.5" /><path d="M5 20c.7-3.4 3-5 7-5s6.3 1.6 7 5" /></>,
-    whatsapp: <path fill="currentColor" stroke="none" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.5-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1.1-1.4-1.1-2.7s.7-1.9.9-2.2c.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.4l.8 2c.1.2.1.4 0 .6l-.4.6-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1.1 2.2 1.4 2.5 1.5.3.1.5.1.7-.1l1-1.2c.2-.3.4-.2.7-.1l2 1c.3.1.5.2.6.4 0 .1 0 .7-.2 1.3Z" />,
+    whatsapp: <path fill="currentColor" stroke="none" d="M6.5 3.5 9 3l2 4-2 1.5a14 14 0 0 0 6.5 6.5L17 13l4 2-.5 2.5A3 3 0 0 1 17.6 20C10 19.3 4.7 14 4 6.4A3 3 0 0 1 6.5 3.5Z" />,
   };
 
   return <svg {...common}>{paths[name]}</svg>;
@@ -374,7 +374,7 @@ function getCustomizedPrice(cake: Cake, size: string, toppings: string[], withCa
 }
 
 export default function HomePage() {
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("All cakes");
@@ -419,8 +419,7 @@ export default function HomePage() {
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("bite-bloom-theme");
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const shouldUseDark = storedTheme ? storedTheme === "dark" : prefersDark;
+    const shouldUseDark = storedTheme ? storedTheme === "dark" : true;
     setDarkMode(shouldUseDark);
     document.documentElement.dataset.theme = shouldUseDark ? "dark" : "light";
   }, []);
@@ -715,7 +714,7 @@ export default function HomePage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: customer.name, email: customer.email, phone: customer.phone, fulfillmentType: deliveryMethod === "delivery" ? "DELIVERY" : "PICKUP", paymentMethod, address: customer.address, notes: customer.notes }),
-    }).catch(() => null);
+      }).catch(() => null);
     if (!response?.ok) {
       whatsappWindow?.close();
       showToast("We could not place your order. Please check your cart and try again.");
