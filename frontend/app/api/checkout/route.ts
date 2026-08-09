@@ -6,6 +6,7 @@ import { apiError, apiSuccess } from "../../../lib/server/api-response";
 import { getAuthenticatedSession } from "../../../lib/server/access";
 import { getGuestCart } from "../../../lib/server/cart";
 import { couponDiscount, couponIsActive } from "../../../lib/server/coupons";
+import { CustomizationValidationError, resolvedCustomizationUnitPrice } from "../../../lib/server/customizations";
 import { hasDatabaseConfiguration } from "../../../lib/server/env";
 import { hasMpesaConfiguration, initiateStkPush, normalizeMpesaPhone } from "../../../lib/server/mpesa";
 import { getPrismaClient } from "../../../lib/server/prisma";
@@ -47,7 +48,20 @@ export async function POST(request: NextRequest) {
     const order = await getPrismaClient().$transaction(async (tx) => {
       const freshCart = await tx.cart.findFirst({
         where: { id: cart.id, status: "ACTIVE" },
-        include: { items: { include: { variant: { include: { cake: true, inventoryItem: true } } }, orderBy: { createdAt: "asc" } }, appliedCoupons: { include: { coupon: true } } },
+        include: {
+          items: {
+            include: {
+              variant: {
+                include: {
+                  cake: { include: { customizations: { where: { isActive: true }, include: { values: { where: { isActive: true } } } } } },
+                  inventoryItem: true,
+                },
+              },
+            },
+            orderBy: { createdAt: "asc" },
+          },
+          appliedCoupons: { include: { coupon: true } },
+        },
       });
       if (!freshCart || freshCart.items.length === 0) throw new CheckoutError(400, "Your cart is empty or has already been checked out.");
 
@@ -57,7 +71,12 @@ export async function POST(request: NextRequest) {
         if (!item.variant.isActive || item.variant.cake.status !== "ACTIVE" || !inventory) throw new CheckoutError(400, `${item.variant.cake.name} is no longer available.`);
         const available = inventory.quantityOnHand - inventory.quantityReserved;
         if (available < item.quantity) throw new CheckoutError(409, `${item.variant.cake.name} does not have enough stock.`);
-        subtotal += Number(item.variant.price) * item.quantity;
+        try {
+          subtotal += resolvedCustomizationUnitPrice({ basePrice: item.variant.price, customizations: item.customizations, definitions: item.variant.cake.customizations }) * item.quantity;
+        } catch (error) {
+          if (error instanceof CustomizationValidationError) throw new CheckoutError(400, error.message);
+          throw error;
+        }
       }
 
       if (freshCart.appliedCoupons.length > 1) throw new CheckoutError(400, "Only one coupon can be used per order.");
@@ -82,7 +101,7 @@ export async function POST(request: NextRequest) {
           orderNumber: orderNumber(), email: input.email, phone: input.phone, fulfillmentType: input.fulfillmentType,
           ...(session ? { user: { connect: { id: session.user.id } } } : {}), status: initialStatus, subtotal, discountTotal, deliveryFee, total, notes: input.notes,
           cart: { connect: { id: freshCart.id } },
-          items: { create: freshCart.items.map((item) => ({ cakeName: item.variant.cake.name, variantName: item.variant.name, sku: item.variant.sku, quantity: item.quantity, unitPrice: item.variant.price, lineTotal: Number(item.variant.price) * item.quantity, customizations: item.customizations as Prisma.InputJsonValue | undefined, cake: { connect: { id: item.variant.cakeId } }, variant: { connect: { id: item.variantId } } })) },
+          items: { create: freshCart.items.map((item) => { const unitPrice = resolvedCustomizationUnitPrice({ basePrice: item.variant.price, customizations: item.customizations, definitions: item.variant.cake.customizations }); return { cakeName: item.variant.cake.name, variantName: item.variant.name, sku: item.variant.sku, quantity: item.quantity, unitPrice, lineTotal: unitPrice * item.quantity, customizations: item.customizations as Prisma.InputJsonValue | undefined, cake: { connect: { id: item.variant.cakeId } }, variant: { connect: { id: item.variantId } } }; }) },
           addresses: { create: { type: "SHIPPING", recipientName: input.name, line1: input.fulfillmentType === "DELIVERY" ? input.address! : "Bite & Bloom studio collection", city: "Nairobi", country: "KE", phone: input.phone } },
           payments: { create: { provider: input.paymentMethod === "MPESA" ? "MPESA" : "CASH", amount: total, currency: freshCart.currency, status: "PENDING", metadata: { method: input.paymentMethod === "MPESA" ? "stk_push" : "cash_on_delivery" } } },
           statusHistory: { create: { toStatus: initialStatus, reason: input.paymentMethod === "MPESA" ? "Order submitted" : "Cash on delivery order submitted" } },
