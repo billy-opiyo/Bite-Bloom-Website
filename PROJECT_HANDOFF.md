@@ -56,7 +56,7 @@ The following route folders exist but contain no page files. The home page curre
 | --- | --- |
 | `(public)` | About, cake catalogue, cake detail, cart, categories, checkout, contact, FAQ, offers, reviews, and order tracking. |
 | `(auth)` | Login, registration, forgot-password, reset-password, email verification. |
-| `account` | Profile, addresses, order history/detail, wishlist, loyalty. |
+| `account` | Authenticated profile, saved-address, and customer-owned order-history APIs are available. Add account pages/UI, order detail route, wishlist, and loyalty UI. |
 | `admin` | Prefer nested protected routes for dashboard, catalog, orders, delivery, customers, analytics, inventory, reviews, and staff rather than one stateful page. |
 
 ### 3. Replace browser-only storefront behaviour
