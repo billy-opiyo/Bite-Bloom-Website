@@ -182,6 +182,18 @@ enum NotificationStatus {
   FAILED
 }
 
+enum ContactMessageStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+  SPAM
+}
+
+enum NewsletterSubscriberStatus {
+  SUBSCRIBED
+  UNSUBSCRIBED
+}
+
 // -----------------------------------------------------------------------------
 // Identity, authentication, roles, and permissions
 // -----------------------------------------------------------------------------
@@ -970,6 +982,32 @@ model Notification {
 
   @@index([status, createdAt])
   @@index([orderId, channel])
+}
+
+model ContactMessage {
+  id        String              @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  source    String              @default("website")
+  status    ContactMessageStatus @default(NEW)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email, createdAt])
+}
+
+model NewsletterSubscriber {
+  id             String                       @id @default(cuid())
+  email          String                       @unique
+  status         NewsletterSubscriberStatus   @default(SUBSCRIBED)
+  subscribedAt   DateTime                     @default(now())
+  unsubscribedAt DateTime?
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+
+  @@index([status, subscribedAt])
 }
 
 model AnalyticsEvent {

@@ -1,0 +1,5 @@
+import LegalPage from "../../../components/legal/LegalPage";
+
+export default function TermsPage() {
+  return <LegalPage title="Terms & Conditions" intro="These draft terms describe the expected rules for ordering cakes, delivery, pickup, payment, customizations, and support." sections={[{ title: "Orders and availability", body: "An order is accepted only after Bite & Bloom confirms availability, preparation timing, delivery details, and payment status. Product options and prices are subject to server confirmation." }, { title: "Custom cakes", body: "Custom designs, inspiration images, messages, colors, and toppings are subject to ingredient, production, safety, and availability constraints. A quotation may be required." }, { title: "Delivery and pickup", body: "Customers must provide accurate contact and delivery details and be available during the selected window. Final delivery areas, fees, lead times, cancellations, and refunds will be confirmed before launch." }, { title: "Customer support", body: "Questions about an order should be sent through the configured contact, phone, or WhatsApp channel so the team can assist promptly." }]} />;
+}

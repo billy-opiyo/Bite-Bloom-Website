@@ -1,0 +1,5 @@
+import LegalPage from "../../../components/legal/LegalPage";
+
+export default function PrivacyPage() {
+  return <LegalPage title="Privacy Policy" intro="This draft explains the information Bite & Bloom expects to use when you browse, contact us, create an account, or place an order." sections={[{ title: "Information we collect", body: "We may collect contact details, delivery information, account information, order details, and support requests that you choose to provide. Payment credentials remain with the payment provider." }, { title: "How we use information", body: "We use information to provide cakes and delivery, process payments, support customers, prevent abuse, improve the service, and send opted-in updates." }, { title: "Sharing and retention", body: "We share only what is needed with service providers such as payment, delivery, email, messaging, hosting, and storage providers. Retention periods and customer rights will be finalized before launch." }, { title: "Your choices", body: "Customers may request access, correction, deletion, or marketing opt-out, subject to legal and operational record-keeping requirements." }]} />;
+}
