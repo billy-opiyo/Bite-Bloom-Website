@@ -2,9 +2,9 @@ import { type NextRequest } from "next/server";
 
 import { apiError, apiSuccess } from "../../../../../lib/server/api-response";
 import { getAuthenticatedSession } from "../../../../../lib/server/access";
+import { parseAddress, serializeAddress } from "../../../../../lib/server/address";
 import { hasDatabaseConfiguration } from "../../../../../lib/server/env";
 import { getPrismaClient } from "../../../../../lib/server/prisma";
-import { parseAddress, serializeAddress } from "../route";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

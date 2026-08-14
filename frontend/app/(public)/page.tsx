@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import PublicFloatingActions from "../../components/layout/PublicFloatingActions";
+import { whatsappLink } from "../../lib/site-config";
 
 type IconName =
   | "arrow"
@@ -414,7 +416,6 @@ export default function HomePage() {
   const [withCard, setWithCard] = useState(false);
   const [uploadName, setUploadName] = useState("");
   const [catalogueCakes, setCatalogueCakes] = useState<Record<string, CatalogueResponseCake>>({});
-  const [showBackToTop, setShowBackToTop] = useState(false);
   const cartCount = cartItems.reduce((count, item) => count + item.quantity, 0);
 
   useEffect(() => {
@@ -480,15 +481,6 @@ export default function HomePage() {
       document.body.style.overflow = "";
     };
   }, [selectedCake, cartOpen, checkoutOpen, accountOpen]);
-
-  useEffect(() => {
-    function handleScroll() {
-      setShowBackToTop(window.scrollY > 300);
-    }
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -702,10 +694,9 @@ export default function HomePage() {
   }
 
   function whatsappOrderLink(orderNumber: string): string {
-    const phone = process.env.NEXT_PUBLIC_WHATSAPP_ORDER_PHONE || "254711222333";
     const summary = cartItems.map((item) => `${item.quantity} × ${item.cake.name} (${item.size})`).join(", ");
     const message = `Hi Bite & Bloom, I placed Cash on Delivery order ${orderNumber}.\n\nItems: ${summary}\nTotal: ${formatPrice(cartTotal)}\nDelivery: ${deliveryMethod === "delivery" ? customer.address : "Studio pickup"}\nCustomer: ${customer.name} · ${customer.phone}`;
-    return `https://wa.me/${phone.replace(/\D/g, "")}?text=${encodeURIComponent(message)}`;
+    return whatsappLink(message);
   }
 
   async function placeOrder() {
@@ -759,10 +750,6 @@ export default function HomePage() {
   function scrollToCollection() {
     document.getElementById("collection")?.scrollIntoView({ behavior: "smooth" });
     setMenuOpen(false);
-  }
-
-  function scrollToTop() {
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function toggleTopping(topping: string) {
@@ -917,16 +904,7 @@ export default function HomePage() {
       {selectedCake && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedCake(null); }}><div className="product-modal" role="dialog" aria-modal="true" aria-labelledby="product-title"><button className="modal-close" onClick={() => setSelectedCake(null)} aria-label="Close product details"><Icon name="close" size={20} /></button><div className="product-gallery"><div className="product-main-image image-sheen"><img src={selectedCake.images[activeImage]} alt={selectedCake.name} /></div><div className="product-thumbnails">{selectedCake.images.map((image, index) => <button key={image} className={activeImage === index ? "active" : ""} onClick={() => setActiveImage(index)}><img src={image} alt={`${selectedCake.name} view ${index + 1}`} /></button>)}</div></div><div className="product-details"><div className="product-kicker"><span>{selectedCake.category}</span><span><Icon name="star" size={13} /> {selectedCake.rating} · {selectedCake.reviews} reviews</span></div><h2 id="product-title">{selectedCake.name}</h2><p className="product-description">{selectedCake.description}</p><strong className="product-price">From {formatPrice(selectedCake.price)}</strong><div className="customizer"><div className="customizer-section"><div className="customizer-label"><strong>Choose a size</strong><span>Required</span></div><div className="option-grid option-grid-3">{["0.5 kg", "1 kg", "2 kg"].map((size) => <button key={size} className={selectedSize === size ? "selected" : ""} onClick={() => setSelectedSize(size)}>{size}</button>)}</div></div><div className="customizer-section"><div className="customizer-label"><strong>Pick a flavor</strong><span>Required</span></div><div className="option-grid">{selectedCake.flavors.map((flavor) => <button key={flavor} className={selectedFlavor === flavor ? "selected" : ""} onClick={() => setSelectedFlavor(flavor)}>{flavor}</button>)}</div></div><div className="customizer-two-col"><div className="customizer-section"><div className="customizer-label"><strong>Shape</strong></div><div className="option-grid">{selectedCake.shapes.map((shape) => <button key={shape} className={selectedShape === shape ? "selected" : ""} onClick={() => setSelectedShape(shape)}>{shape}</button>)}</div></div><div className="customizer-section"><div className="customizer-label"><strong>Finish</strong></div><select className="select-control" value={theme} onChange={(event) => setTheme(event.target.value)}><option>Whipped cream</option><option>Buttercream</option><option>Naked finish</option><option>Chocolate ganache</option></select></div></div><div className="customizer-section"><div className="customizer-label"><strong>Your message</strong><span>Optional</span></div><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="e.g. Happy birthday, Amara!" maxLength={80} /><small className="field-hint">{message.length}/80 characters</small></div><div className="customizer-section"><div className="customizer-label"><strong>Make it yours</strong><span>Optional extras</span></div><div className="extra-grid">{["Fresh fruit", "Edible flowers", "Chocolate curls", "Macarons"].map((topping) => <button key={topping} className={toppings.includes(topping) ? "selected" : ""} onClick={() => toggleTopping(topping)}><span className="extra-check">{toppings.includes(topping) && <Icon name="check" size={13} />}</span>{topping}</button>)}</div><label className="upload-control"><Icon name="upload" size={17} /><span><strong>{uploadName || "Upload inspiration image"}</strong><small>{uploadName ? "Ready to share with our baker" : "JPG or PNG · up to 5MB"}</small></span><input type="file" accept="image/png,image/jpeg" onChange={(event) => setUploadName(event.target.files?.[0]?.name ?? "")} /></label><div className="toggle-options"><label><input type="checkbox" checked={withCandles} onChange={(event) => setWithCandles(event.target.checked)} /><span className="fake-toggle" />Add candles <b>+ KSh 250</b></label><label><input type="checkbox" checked={withCard} onChange={(event) => setWithCard(event.target.checked)} /><span className="fake-toggle" />Add a greeting card <b>+ KSh 350</b></label></div></div></div><div className="add-cart-row"><div><small>Total from</small><strong>{formatPrice(customizationPrice)}</strong></div><button className="button button-dark" onClick={addToCart}>Add to cart <Icon name="cart" size={17} /></button></div><p className="allergen-note"><Icon name="leaf" size={14} /> {selectedCake.ingredients} <br /><span>Allergen note: {selectedCake.allergens}</span></p></div></div></div>}
       {toast && <div className="toast" role="status"><span><Icon name="check" size={16} /></span>{toast}</div>}
 
-      <a className="whatsapp-float" href={`https://wa.me/254711222333?text=${encodeURIComponent(whatsappMessage)}`} target="_blank" rel="noreferrer" aria-label="Chat with us on WhatsApp">
-        <Icon name="whatsapp" size={24} />
-        <span className="whatsapp-float-label">Chat with us</span>
-      </a>
-
-      {showBackToTop && (
-        <button className="back-to-top" onClick={scrollToTop} aria-label="Back to top">
-          <Icon name="arrow" size={20} />
-        </button>
-      )}
+      <PublicFloatingActions message={whatsappMessage} />
     </div>
   );
 }
