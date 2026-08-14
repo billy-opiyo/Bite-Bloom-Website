@@ -1,0 +1,19 @@
+import { type NextRequest } from "next/server";
+import { apiError, apiSuccess } from "../../../../lib/server/api-response";
+import { hasDatabaseConfiguration } from "../../../../lib/server/env";
+import { getPrismaClient } from "../../../../lib/server/prisma";
+
+export const dynamic = "force-dynamic";
+
+export async function POST(request: NextRequest) {
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Email verification is not configured yet.", 503);
+  const token = (await request.json().catch(() => null) as { token?: unknown } | null)?.token;
+  if (typeof token !== "string" || token.length < 32) return apiError("VALIDATION_ERROR", "A valid verification token is required.", 400);
+  try {
+    const prisma = getPrismaClient();
+    const record = await prisma.verificationToken.findUnique({ where: { token } });
+    if (!record || record.expires < new Date()) return apiError("VALIDATION_ERROR", "That verification link has expired.", 400);
+    await prisma.$transaction([prisma.user.update({ where: { email: record.identifier }, data: { emailVerified: new Date(), status: "ACTIVE" } }), prisma.verificationToken.delete({ where: { token } })]);
+    return apiSuccess({ verified: true, message: "Your email has been verified." });
+  } catch { return apiError("DATABASE_UNAVAILABLE", "Unable to verify this email right now.", 503); }
+}

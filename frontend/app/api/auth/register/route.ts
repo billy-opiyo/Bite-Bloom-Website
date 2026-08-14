@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { randomBytes } from "crypto";
 import { hash } from "bcryptjs";
 import { type NextRequest } from "next/server";
 
@@ -36,6 +37,9 @@ export async function POST(request: NextRequest) {
       await tx.userRole.create({ data: { userId: created.id, roleId: customerRole.id } });
       await tx.order.updateMany({ where: { email: input.email, userId: null }, data: { userId: created.id } });
       await tx.auditLog.create({ data: { actorId: created.id, action: "CUSTOMER_REGISTERED", entityType: "User", entityId: created.id } });
+      const token = randomBytes(32).toString("hex");
+      await tx.verificationToken.create({ data: { identifier: input.email, token, expires: new Date(Date.now() + 24 * 60 * 60 * 1000) } });
+      await tx.notification.create({ data: { userId: created.id, channel: "EMAIL", template: "VERIFY_EMAIL", recipient: input.email, payload: { token } } });
       return created;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     return apiSuccess({ id: user.id, name: user.name, email: user.email, message: "Your account is ready. Please sign in." }, { status: 201 });

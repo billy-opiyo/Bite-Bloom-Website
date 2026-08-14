@@ -14,7 +14,7 @@ import { getPrismaClient } from "../../../lib/server/prisma";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type CheckoutInput = { name: string; email: string; phone: string; fulfillmentType: "DELIVERY" | "PICKUP"; paymentMethod: "MPESA" | "CASH_ON_DELIVERY"; address?: string; notes?: string };
+type CheckoutInput = { name: string; email: string; phone: string; fulfillmentType: "DELIVERY" | "PICKUP"; paymentMethod: "MPESA" | "CASH_ON_DELIVERY"; address?: string; notes?: string; scheduledFor: Date; deliverySlot: string };
 
 class CheckoutError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
@@ -27,8 +27,14 @@ function parseCheckout(value: unknown): CheckoutInput | null {
   const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
   const fulfillmentType = input.fulfillmentType === "DELIVERY" || input.fulfillmentType === "PICKUP" ? input.fulfillmentType : null;
   const paymentMethod = input.paymentMethod === "MPESA" || input.paymentMethod === "CASH_ON_DELIVERY" ? input.paymentMethod : null;
-  if (!text(input.name, 2, 120) || !/^\S+@\S+\.\S+$/.test(email) || !text(input.phone, 7, 32) || !fulfillmentType || !paymentMethod || (fulfillmentType === "DELIVERY" && !text(input.address, 5, 500))) return null;
-  return { name: input.name.trim(), email, phone: input.phone.trim(), fulfillmentType, paymentMethod, ...(text(input.address, 1, 500) ? { address: input.address.trim() } : {}), ...(text(input.notes, 1, 2000) ? { notes: input.notes.trim() } : {}) };
+  const scheduledDate = typeof input.scheduledDate === "string" ? input.scheduledDate : "";
+  const deliverySlot = typeof input.deliverySlot === "string" ? input.deliverySlot : "";
+  const scheduledFor = /^\d{4}-\d{2}-\d{2}$/.test(scheduledDate) ? new Date(`${scheduledDate}T00:00:00+03:00`) : null;
+  const tomorrow = new Date(); tomorrow.setHours(0, 0, 0, 0); tomorrow.setDate(tomorrow.getDate() + 1);
+  const maxDate = new Date(tomorrow); maxDate.setDate(maxDate.getDate() + 90);
+  const validSlot = ["10:00am – 12:00pm", "12:00pm – 2:00pm", "3:00pm – 5:00pm"].includes(deliverySlot);
+  if (!text(input.name, 2, 120) || !/^\S+@\S+\.\S+$/.test(email) || !text(input.phone, 7, 32) || !fulfillmentType || !paymentMethod || !scheduledFor || Number.isNaN(scheduledFor.getTime()) || scheduledFor < tomorrow || scheduledFor > maxDate || !validSlot || (fulfillmentType === "DELIVERY" && !text(input.address, 5, 500))) return null;
+  return { name: input.name.trim(), email, phone: input.phone.trim(), fulfillmentType, paymentMethod, scheduledFor, deliverySlot, ...(text(input.address, 1, 500) ? { address: input.address.trim() } : {}), ...(text(input.notes, 1, 2000) ? { notes: input.notes.trim() } : {}) };
 }
 
 function orderNumber(): string {
@@ -98,13 +104,14 @@ export async function POST(request: NextRequest) {
       const initialStatus = input.paymentMethod === "CASH_ON_DELIVERY" ? "CONFIRMED" : "PENDING_PAYMENT";
       const order = await tx.order.create({
         data: {
-          orderNumber: orderNumber(), email: input.email, phone: input.phone, fulfillmentType: input.fulfillmentType,
+          orderNumber: orderNumber(), email: input.email, phone: input.phone, fulfillmentType: input.fulfillmentType, scheduledFor: input.scheduledFor, deliverySlot: input.deliverySlot,
           ...(session ? { user: { connect: { id: session.user.id } } } : {}), status: initialStatus, subtotal, discountTotal, deliveryFee, total, notes: input.notes,
           cart: { connect: { id: freshCart.id } },
           items: { create: freshCart.items.map((item) => { const unitPrice = resolvedCustomizationUnitPrice({ basePrice: item.variant.price, customizations: item.customizations, definitions: item.variant.cake.customizations }); return { cakeName: item.variant.cake.name, variantName: item.variant.name, sku: item.variant.sku, quantity: item.quantity, unitPrice, lineTotal: unitPrice * item.quantity, customizations: item.customizations as Prisma.InputJsonValue | undefined, cake: { connect: { id: item.variant.cakeId } }, variant: { connect: { id: item.variantId } } }; }) },
           addresses: { create: { type: "SHIPPING", recipientName: input.name, line1: input.fulfillmentType === "DELIVERY" ? input.address! : "Bite & Bloom studio collection", city: "Nairobi", country: "KE", phone: input.phone } },
           payments: { create: { provider: input.paymentMethod === "MPESA" ? "MPESA" : "CASH", amount: total, currency: freshCart.currency, status: "PENDING", metadata: { method: input.paymentMethod === "MPESA" ? "stk_push" : "cash_on_delivery" } } },
           statusHistory: { create: { toStatus: initialStatus, reason: input.paymentMethod === "MPESA" ? "Order submitted" : "Cash on delivery order submitted" } },
+          notifications: { create: [{ channel: "EMAIL", template: "ORDER_RECEIVED", recipient: input.email, payload: { scheduledFor: input.scheduledFor.toISOString(), deliverySlot: input.deliverySlot } }, { channel: "WHATSAPP", template: "ORDER_RECEIVED", recipient: input.phone, payload: { scheduledFor: input.scheduledFor.toISOString(), deliverySlot: input.deliverySlot } }] },
         }, include: { payments: true },
       });
 

@@ -348,6 +348,8 @@ model Cake {
   shortDescription String?
   description     String?      @db.Text
   basePrice       Decimal      @db.Decimal(12, 2)
+  ingredients     String?      @db.Text
+  allergens       String?      @db.Text
   currency        String       @default("KES")
   status          CakeStatus   @default(DRAFT)
   isFeatured      Boolean      @default(false)
@@ -601,6 +603,8 @@ model Order {
   taxTotal         Decimal        @default(0) @db.Decimal(12, 2)
   total            Decimal        @db.Decimal(12, 2)
   notes            String?        @db.Text
+  scheduledFor     DateTime?
+  deliverySlot     String?
   placedAt         DateTime       @default(now())
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt

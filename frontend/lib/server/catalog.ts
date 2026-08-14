@@ -6,7 +6,12 @@ import { getPrismaClient } from "./prisma";
 
 const publishedCakeInclude = {
   categories: { include: { category: true } },
-  variants: { where: { isActive: true }, orderBy: { price: "asc" } },
+  images: { where: { mediaAsset: { status: "READY", visibility: "PUBLIC" } }, orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }], include: { mediaAsset: { select: { objectKey: true } } } },
+  variants: {
+    where: { isActive: true },
+    orderBy: { price: "asc" },
+    include: { inventoryItem: { select: { quantityOnHand: true, quantityReserved: true, status: true } } },
+  },
 } satisfies Prisma.CakeInclude;
 
 const publishedCakeDetailInclude = {
@@ -26,11 +31,14 @@ export type CatalogCake = {
   name: string;
   slug: string;
   description: string | null;
+  ingredients: string | null;
+  allergens: string | null;
   price: number;
   currency: string;
   isFeatured: boolean;
   categories: Array<{ name: string; slug: string }>;
-  variants: Array<{ id: string; name: string; sku: string; price: number; weightGrams: number | null }>;
+  images: Array<{ url: string | null; altText: string | null }>;
+  variants: Array<{ id: string; name: string; sku: string; price: number; weightGrams: number | null; available: number; isAvailable: boolean }>;
 };
 
 export type CatalogCakeDetail = CatalogCake & {
@@ -47,21 +55,27 @@ export type CatalogCakeDetail = CatalogCake & {
 };
 
 function serializeCake(cake: PublishedCake): CatalogCake {
+  const mediaBaseUrl = (process.env.NEXT_PUBLIC_MEDIA_BASE_URL || process.env.R2_PUBLIC_URL || "").replace(/\/$/, "");
   return {
     id: cake.id,
     name: cake.name,
     slug: cake.slug,
     description: cake.shortDescription,
+    ingredients: cake.ingredients,
+    allergens: cake.allergens,
     price: Number(cake.basePrice),
     currency: cake.currency,
     isFeatured: cake.isFeatured,
     categories: cake.categories.map(({ category }) => ({ name: category.name, slug: category.slug })),
+    images: cake.images.map((image) => ({ url: mediaBaseUrl ? `${mediaBaseUrl}/${image.mediaAsset.objectKey.split("/").map(encodeURIComponent).join("/")}` : null, altText: image.altText })),
     variants: cake.variants.map((variant) => ({
       id: variant.id,
       name: variant.name,
       sku: variant.sku,
       price: Number(variant.price),
       weightGrams: variant.weightGrams,
+      available: Math.max(0, (variant.inventoryItem?.quantityOnHand ?? 0) - (variant.inventoryItem?.quantityReserved ?? 0)),
+      isAvailable: Boolean(variant.inventoryItem && variant.inventoryItem.quantityOnHand > variant.inventoryItem.quantityReserved && variant.inventoryItem.status !== "OUT_OF_STOCK"),
     })),
   };
 }

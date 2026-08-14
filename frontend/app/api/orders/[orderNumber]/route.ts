@@ -25,6 +25,7 @@ export async function GET(request: NextRequest, { params }: { params: { orderNum
     return apiSuccess({
       orderNumber: order.orderNumber,
       status: order.status,
+      paymentStatus: order.paymentStatus,
       fulfillmentType: order.fulfillmentType,
       placedAt: order.placedAt,
       estimatedAt: order.shipment?.estimatedAt ?? null,
