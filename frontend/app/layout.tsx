@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
   openGraph: { title: "Bite & Bloom — Cakes made for your moment", description: "Thoughtful cakes, baked fresh and delivered across Nairobi.", type: "website", siteName: "Bite & Bloom" },
   twitter: { card: "summary", title: "Bite & Bloom — Cakes made for your moment", description: "Thoughtful cakes, baked fresh and delivered across Nairobi." },
-  other: { "theme-color": "#a65e56" },
+  other: { "theme-color": "#8b431d" },
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
@@ -24,6 +24,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try { document.documentElement.dataset.theme = localStorage.getItem("bite-bloom-theme") || "dark"; } catch (error) { document.documentElement.dataset.theme = "dark"; }`,
+          }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   );
