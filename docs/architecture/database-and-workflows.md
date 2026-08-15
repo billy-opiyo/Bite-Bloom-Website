@@ -1,191 +1,173 @@
 # Database and Workflow Architecture
 
-This document defines the data model and server-side workflows for the cake e-commerce application. It is the design baseline for future implementation work. The application must not bypass these boundaries from browser code.
+**Last reviewed:** 15 August 2026
 
-The executable Prisma model is in [`prisma/schema.prisma`](../../prisma/schema.prisma).
+This document describes the current Bite & Bloom data and server workflow boundaries. The executable schema is [`prisma/schema.prisma`](../../prisma/schema.prisma). The active API implementation is in `frontend/app/api`; reusable server-only logic is in `frontend/lib/server`.
+
+The database and server are authoritative. Browser state, displayed prices, role selectors, payment results, and client-submitted order status are never trusted as commercial or security records.
+
+## Current architecture
+
+```text
+Browser pages/components
+        |
+        v
+Next.js Route Handlers: frontend/app/api
+        |
+        +--> server-only helpers: frontend/lib/server
+        |       auth, access, catalog, cart, coupons, customizations,
+        |       order state, M-Pesa, Prisma, validation
+        |
+        v
+Prisma Client --> PostgreSQL (Neon intended)
+        |
+        +--> Daraja callback/payment requests
+        +--> WhatsApp confirmation links
+        +--> future email/R2/provider integrations
+```
+
+There is no running standalone service under the root `backend/` directory. New feature APIs belong in Next.js Route Handlers unless a separate service is explicitly approved.
 
 ## Design principles
 
-- Neon PostgreSQL is the system of record.
-- Prisma owns schema definitions, relations, migrations, and typed queries.
-- `DATABASE_URL` must contain Neon’s pooled connection string with `-pooler` in the host address.
-- Money is stored as PostgreSQL `Decimal`, never floating-point numbers.
+- PostgreSQL is the system of record; Neon pooled connections are the intended runtime configuration.
+- Prisma owns schema definitions, relations, and typed queries.
+- Money is stored as PostgreSQL `Decimal`, never JavaScript floating-point values in persisted records.
 - Orders store immutable product, variant, price, address, and customization snapshots.
-- Business rules, authorization, payment verification, inventory reservations, and sensitive calculations run on the server.
-- Carts and inventory reservations are temporary; orders, payments, status history, stock movements, audit logs, and analytics events are durable records.
-- Catalog records are archived or deactivated instead of being deleted when historical references exist.
-- All external webhooks and retried commands must be idempotent.
+- Authorization, payment verification, inventory reservations, order transitions, and sensitive calculations run on the server.
+- Temporary carts/reservations are distinct from durable orders, payments, status history, stock movements, audit logs, and analytics records.
+- Catalog records are deactivated/archived rather than deleted when historical references exist.
+- Webhooks, callbacks, scheduled jobs, and retries must be idempotent.
 
 ## Domain model
 
-### Identity and authorization
+### Identity and access
 
-`User`, `Account`, `Session`, and `VerificationToken` support Auth.js. Password credentials, when enabled, use `User.passwordHash` and a server-side bcrypt or Argon2 implementation. Passwords and raw tokens are never stored.
+`User`, `Account`, `Session`, and `VerificationToken` support Auth.js. Password credentials are compared with bcrypt; password hashes and raw verification/reset tokens are not exposed to the client.
 
-`Role`, `Permission`, `UserRole`, and `RolePermission` implement database-backed RBAC. Permission keys use the form `resource:action`, such as `order:read` or `inventory:adjust`.
+`Role`, `Permission`, `UserRole`, and `RolePermission` hold the role model. The seed currently creates `customer`, `support`, `baker`, `fulfillment`, `analyst`, `admin`, and `owner` roles.
+
+The current coarse authorization boundary is:
+
+1. Auth.js establishes the session.
+2. `frontend/middleware.ts` protects `/admin/:path*` for `admin` or `owner` roles.
+3. API handlers call `getAuthenticatedSession()` or `getAdminSession()`.
+4. The handler checks ownership and resource state before reading or mutating data.
+5. Multi-record mutations use Prisma transactions.
+6. Security-sensitive privileged changes append an `AuditLog` where implemented.
+
+Granular permission checks for every seeded permission, staff invitations, and role-management APIs remain release work.
 
 ### Catalog
 
-`Cake` is the sellable product family. `CakeVariant` represents a purchasable size or configuration and owns the SKU and price used for carts and orders. `Category` supports nested categories through the self-referencing category tree. `CakeCategory` provides the many-to-many catalog relationship.
+`Cake` is a sellable product family. `CakeVariant` owns the SKU and price used in carts and orders. `Category` and `CakeCategory` provide category relationships. `CakeCustomization` and `CakeCustomizationValue` define allowed server-validated options.
 
-`CakeCustomization` and `CakeCustomizationValue` define allowed server-validated options. Customer selections are stored as JSON snapshots in cart and order items after validation against the catalog definition.
+Public catalog serialization includes active cakes, variants, categories, ingredients, allergens, preparation time, and only ready/public media. Current seeded media is not populated, so the UI uses an explicit placeholder where no asset exists.
 
-`CakeImage` attaches a typed `MediaAsset` to a cake. Promotion targeting is separated into `PromotionCake` and `PromotionCategory`.
+`MediaAsset`, `UploadSession`, and `CakeImage` model the intended media boundary, but R2 upload-session and completion handlers are not currently present.
 
 ### Commerce
 
-`Cart` and `CartItem` support both authenticated users and guest sessions. `Coupon`, `CartCoupon`, `CouponRedemption`, and `Promotion` represent discount configuration and usage history.
+`Cart` and `CartItem` support guest sessions and authenticated users. A guest cart is identified by the HTTP-only `bite_bloom_cart` cookie. `Coupon`, `CartCoupon`, and `CouponRedemption` hold discount configuration and usage history.
 
-`Order` is the immutable commercial record. It is related to `OrderItem`, `OrderAddress`, `Payment`, `Shipment`, `OrderStatusHistory`, `OrderNote`, `Refund`, `CouponRedemption`, and `Notification` records. `Review` may reference a user and order, but moderation remains independent of order state.
+`Order` is the durable commercial record. It relates to item/address snapshots, payments, shipments, status history, notes, refunds, coupon redemptions, reviews, reservations, notifications, and loyalty transactions.
 
-`Wishlist` and `WishlistItem` support saved products. `LoyaltyAccount` and `LoyaltyTransaction` provide an append-only points ledger.
+`Wishlist` and `WishlistItem` are implemented for authenticated customers. Loyalty models exist, but the customer loyalty workflow is not yet implemented.
 
 ### Inventory
 
-`InventoryItem` is one stock ledger per `CakeVariant`. `quantityOnHand` is physically available stock and `quantityReserved` is stock held for an active cart or order. `StockMovement` is the append-only audit trail. `InventoryReservation` records temporary holds and their lifecycle.
-
-### Operations and observability
-
-- `Shipment` and `ShipmentEvent` power delivery tracking and map/timeline views.
-- `Notification` records email, WhatsApp, and SMS delivery attempts without putting provider credentials in the database.
-- `AnalyticsEvent` stores validated behavioral events; `AnalyticsDailyMetric` stores aggregated reporting values.
-- `AuditLog` records privileged changes to orders, catalog, users, inventory, roles, permissions, and media.
-
-## Roles and permissions
-
-The initial role catalogue should be seeded as system roles. Roles are data, not hardcoded conditionals scattered through handlers.
-
-| Role | Intended responsibility | Typical permissions |
-| --- | --- | --- |
-| `customer` | Shop, manage their account, and view their own commerce data | `catalog:read`, `cart:write`, `order:create`, `order:read:own`, `review:create`, `wishlist:write`, `profile:write` |
-| `support` | Customer support and order assistance | `customer:read`, `order:read`, `order:update`, `review:read`, `notification:send` |
-| `baker` | Production preparation and cake availability | `cake:read`, `order:read`, `order:update:production`, `inventory:read` |
-| `fulfillment` | Packing, dispatch, and delivery tracking | `order:read`, `shipment:update`, `inventory:read`, `inventory:reserve` |
-| `analyst` | Read-only business reporting | `analytics:read` |
-| `admin` | Day-to-day platform administration | All operational permissions except ownership transfer and secret management |
-| `owner` | Full business ownership and access administration | All approved permissions, including `role:manage` and `permission:manage` |
-
-The exact permission keys are seeded and reviewed before implementation. A permission must be checked on the server after session authentication and before the business operation. The browser may hide unavailable controls, but that is only a usability optimization and never an authorization boundary.
-
-### Authorization sequence
-
-1. Auth.js establishes the user session.
-2. Next.js middleware performs coarse route protection where appropriate.
-3. The API route or Server Action loads the session user and required permission.
-4. The service checks ownership, resource state, and business constraints.
-5. The mutation runs in a transaction when it affects more than one related record.
-6. The mutation appends an `AuditLog` record for privileged or security-sensitive changes.
-
-## Order workflow
-
-### State transitions
-
-| Current state | Allowed transition | Trigger and required server work |
-| --- | --- | --- |
-| `PENDING_PAYMENT` | `PAID` | Verified payment callback or approved cash-payment action; idempotently record `Payment`. |
-| `PAID` | `CONFIRMED` | Server confirms payment amount/currency and active inventory reservations. |
-| `CONFIRMED` | `PREPARING` | Authorized production user starts preparation. |
-| `PREPARING` | `READY_FOR_DISPATCH` | Production marks the order complete and ready. |
-| `READY_FOR_DISPATCH` | `OUT_FOR_DELIVERY` | Fulfillment creates/updates shipment and dispatches the order. |
-| `OUT_FOR_DELIVERY` | `DELIVERED` | Courier or authorized staff confirms delivery and appends a shipment event. |
-| `DELIVERED` | `COMPLETED` | Server closes the order after the configured completion period or explicit confirmation. |
-| `PENDING_PAYMENT`, `PAID`, `CONFIRMED` | `CANCELLED` | Authorized cancellation or timeout; release active inventory reservations and update payment/refund state. |
-| `PENDING_PAYMENT` | `FAILED` | Payment failure or checkout expiry; preserve the reason and release reservations. |
-
-Every transition appends `OrderStatusHistory` with the previous state, new state, actor, reason, and relevant metadata. A service must reject transitions that are not in the allowed state machine.
-
-### Checkout transaction
-
-1. Re-read the cart, active variant prices, customization definitions, coupon rules, delivery rules, and user ownership on the server.
-2. Reject inactive products, invalid customizations, invalid quantities, expired coupons, and stale or manipulated prices.
-3. Lock the affected `InventoryItem` rows for update.
-4. Confirm `quantityOnHand - quantityReserved` is sufficient for every line.
-5. Create the order and immutable item/address snapshots.
-6. Increase `quantityReserved` and create `InventoryReservation` records with an expiry time.
-7. Add a `RESERVATION` `StockMovement` for each affected inventory item.
-8. Commit the transaction before starting an external payment request.
-9. Create a payment attempt with a server-generated idempotency key.
-
-The server recalculates subtotal, discounts, delivery fee, tax, and total. Values submitted by the client are informational only.
-
-### Payment and completion
-
-- Payment provider callbacks are received by a server-only endpoint.
-- The callback is authenticated or signature-verified, deduplicated by provider reference, and checked against the expected order amount and currency.
-- A successful callback updates `Payment`, `Order.paymentStatus`, and the order state in one transaction.
-- Cancellation or payment failure releases active reservations exactly once.
-- When production begins, the reservation is converted to a sale: decrement `quantityOnHand`, decrement `quantityReserved`, mark the reservation `CONSUMED`, and append a `SALE` movement.
-- Refunds create `Refund` records and never mutate or delete the original payment history.
-
-## Inventory workflow
-
-The available-to-sell quantity is:
+`InventoryItem` is maintained per cake variant. `quantityOnHand` is physical stock and `quantityReserved` is held stock. Available-to-sell is:
 
 ```text
 available = quantityOnHand - quantityReserved
 ```
 
-Inventory changes must happen through a transaction that locks the relevant `InventoryItem` row. Direct updates from UI code are prohibited.
+`StockMovement` records adjustments, reservations, releases, and sales. `InventoryReservation` records the temporary hold and its lifecycle.
 
-### Reservation lifecycle
+## Implemented workflows
 
-1. `ACTIVE`: a cart or pending order holds stock until `expiresAt`.
-2. `CONSUMED`: payment and fulfillment have converted the hold into a sale.
-3. `RELEASED`: cancellation or payment failure returned the hold to availability.
-4. `EXPIRED`: a scheduled server job released a hold after its expiry time.
-5. `CANCELLED`: an operator explicitly invalidated the reservation.
+### Catalog and cart
 
-The expiry job is safe to retry. It selects active expired reservations, locks their inventory items, decrements `quantityReserved`, marks the reservation terminal, and appends a `RELEASE` movement. It must not release a reservation that has already been consumed or released.
+1. A public handler reads active catalog records through `frontend/lib/server/catalog.ts`.
+2. A variant is available only when it has inventory and `quantityOnHand > quantityReserved`.
+3. Add-to-cart sends the variant and customization selection to the server.
+4. The server re-reads the variant/customization definitions and calculates the unit price.
+5. Cart item changes and coupon changes are persisted through Route Handlers.
 
-Manual receipts, corrections, waste, returns, and cycle counts use `StockMovement` with the actor, reason, before quantity, after quantity, and reference metadata. `InventoryStatus` is derived or updated transactionally from stock levels and reorder thresholds.
+Client display values are convenience values; they are recalculated during checkout.
 
-## Analytics workflow
+### Checkout transaction
 
-### Collection
+The current checkout handler validates:
 
-The browser may emit a restricted allowlist of non-sensitive events such as `page_view`, `search`, `product_view`, `add_to_cart`, and `checkout_started`. The server validates the event name, shape, size, and rate limit before persisting it.
+- contact details and Kenyan phone format for M-Pesa;
+- delivery or pickup;
+- a scheduled date from tomorrow through the configured validation window;
+- one of the server-defined delivery slots;
+- required delivery address;
+- payment method;
+- active catalog variants, customization values, coupons, and inventory.
 
-Authoritative events such as `order_created`, `payment_succeeded`, `order_completed`, `refund_created`, and `inventory_adjusted` are emitted by backend services after successful transactions. They must not be accepted as trusted facts from the browser.
+The transaction then re-reads the cart, calculates totals, creates order/item/address snapshots, creates payment/reservation records, and reserves stock before an external payment request is started. Client-submitted totals are not authoritative.
 
-`AnalyticsEvent` stores pseudonymous identifiers, event properties, route context, and an IP hash when needed for abuse analysis. Do not store payment credentials, access tokens, full addresses, or unnecessary personal data in event properties.
+Current business gaps are delivery-area/fee rules, slot capacity, checkout idempotency, and full payment reconciliation.
 
-### Aggregation
+### Payment
 
-An asynchronous server job reads events in bounded time windows and upserts `AnalyticsDailyMetric` records using a deterministic `metricKey`. Aggregation is idempotent and can be rerun for a date range. Dashboards read aggregated metrics by default; access to raw events is restricted to the `analyst`, `admin`, and `owner` roles.
+M-Pesa is server-only. `frontend/lib/server/mpesa.ts` obtains a Daraja token, starts STK Push, and validates the callback URL as HTTPS. The callback route updates the matching payment/order idempotently using provider references and expected order data. A retry route is limited to an eligible pending M-Pesa order without an existing provider reference.
 
-Recommended initial metric keys include `orders.created`, `orders.completed`, `revenue.gross`, `revenue.refunded`, `cakes.viewed`, `cakes.added_to_cart`, `checkout.started`, `checkout.completed`, and `inventory.low_stock`.
+Cash on delivery creates a pending cash payment and produces a prefilled WhatsApp confirmation link. Delivery-time cash settlement is handled in the order transition service.
 
-## File upload architecture
+Refunds, payment query/reconciliation, provider failure reporting, and live Daraja verification require provider configuration and tests.
 
-Files are stored in Cloudflare R2. PostgreSQL stores metadata and lifecycle state, never file bytes. `MediaAsset` is the canonical metadata record and typed join models such as `CakeImage` attach it to domain entities. `UploadSession` tracks a short-lived upload authorization and completion attempt.
+### Order state machine
 
-### Upload flow
+The current transition service allows:
 
-1. An authenticated server request declares the intended purpose, filename, MIME type, byte size, and optional dimensions.
-2. The server checks the user permission and purpose-specific limits. It normalizes the filename and generates a non-guessable object key; clients never choose the final key.
-3. The server creates `MediaAsset` with `PENDING` status and an `UploadSession` with a short expiry.
-4. The server returns a short-lived R2 presigned upload URL or multipart upload instructions. R2 credentials remain server-only.
-5. The browser uploads directly to R2 over HTTPS and never receives bucket secrets.
-6. The browser calls a server completion endpoint. The server checks the session, performs an R2 `HEAD`/completion verification, confirms size and content type, optionally verifies a checksum, and marks the asset `READY`.
-7. A privileged service attaches the ready asset through a typed relation such as `CakeImage`.
-8. Public assets are served through an R2 custom domain or CDN URL. Private assets use short-lived signed download URLs.
+| Current | Allowed next state |
+| --- | --- |
+| `PENDING_PAYMENT` | `PAID`, `FAILED`, `CANCELLED` |
+| `PAID` | `CONFIRMED`, `CANCELLED` |
+| `CONFIRMED` | `PREPARING`, `CANCELLED` |
+| `PREPARING` | `READY_FOR_DISPATCH` |
+| `READY_FOR_DISPATCH` | `OUT_FOR_DELIVERY` |
+| `OUT_FOR_DELIVERY` | `DELIVERED` |
+| `DELIVERED` | `COMPLETED` |
+| terminal state | no further transition |
 
-### Upload security and cleanup
+Each accepted transition writes `OrderStatusHistory`. Entering `PREPARING` consumes active reservations as a sale. Cancellation/failure releases active reservations. `DELIVERED` settles a pending cash payment.
 
-- Allowlist MIME types, file extensions, dimensions, and maximum sizes by `MediaPurpose`.
-- Treat client-provided MIME type and filename as untrusted metadata.
-- Use server-side content inspection and malware/quarantine processing before making an asset public.
-- Keep user-uploaded files isolated from executable hosting paths.
-- Do not expose raw bucket names or permanent signed URLs where a scoped URL will work.
-- A scheduled cleanup job marks abandoned sessions failed and removes unreferenced temporary R2 objects.
-- Deleting a domain attachment first removes the typed relation; physical object deletion is an audited, delayed cleanup operation.
+Customer-facing routes can read owned orders or use the order-number/email tracking flow. Customers cannot set status.
 
-## Consistency, retention, and operational controls
+### Reservation expiry
 
-- Use database transactions for checkout, payment state changes, reservations, refunds, role changes, and inventory adjustments.
-- Use unique provider references, order numbers, SKUs, session tokens, upload keys, and compound membership keys as idempotency boundaries.
-- Never expose Prisma queries or database credentials to frontend bundles.
-- Apply least-privilege database and R2 credentials per environment.
-- Redact secrets and personal data from logs and analytics properties.
-- Retain order, payment, inventory, and audit records according to business and legal requirements; retain analytics only as long as useful.
-- Backups, restore tests, migration review, and production schema changes are operational prerequisites before launch.
+`/api/jobs/expire-reservations` requires `CRON_SECRET`. It processes a bounded batch of active reservations whose expiry has passed, decrements reserved quantities, marks the reservation terminal, and records a release movement. It must be invoked by a trusted scheduler before production use.
+
+### Reviews and contact records
+
+A customer review must correspond to a delivered order containing the cake and is created as `PENDING`. Public reads expose published reviews. Admin moderation changes status and writes an audit record.
+
+Contact and newsletter handlers validate and persist `ContactMessage` and `NewsletterSubscriber` records. Provider delivery, rate limiting, consent history, and admin inbox workflows remain incomplete.
+
+## Data model coverage
+
+The Prisma schema also contains models for `Shipment`, `ShipmentEvent`, `Notification`, `LoyaltyAccount`, `LoyaltyTransaction`, `MediaAsset`, `UploadSession`, `AnalyticsEvent`, `AnalyticsDailyMetric`, and `AuditLog`. Their full operational workflows are planned but not all are connected to UI or external providers.
+
+## Operational controls still required
+
+- Create/review/commit the initial Prisma migration; the current `prisma/migrations/` directory is empty.
+- Keep pooled runtime URLs and direct administrative/backup URLs separate.
+- Add rate limiting, CSRF strategy, secure headers/CSP, Turnstile/WAF, structured logging, error monitoring, and secret management.
+- Implement R2 upload verification, media cleanup, email/WhatsApp delivery records and retries, and scheduler deployment.
+- Add backup/restore tests, staging isolation, migration checks, and automated API/browser coverage.
+- Redact secrets, payment credentials, full addresses, and unnecessary personal data from logs and analytics.
+
+## Related source
+
+- [`prisma/schema.prisma`](../../prisma/schema.prisma)
+- [`frontend/lib/server/catalog.ts`](../../frontend/lib/server/catalog.ts)
+- [`frontend/lib/server/cart.ts`](../../frontend/lib/server/cart.ts)
+- [`frontend/lib/server/order-state.ts`](../../frontend/lib/server/order-state.ts)
+- [`frontend/lib/server/mpesa.ts`](../../frontend/lib/server/mpesa.ts)
+- [`frontend/app/api/checkout/route.ts`](../../frontend/app/api/checkout/route.ts)
+- [`frontend/middleware.ts`](../../frontend/middleware.ts)

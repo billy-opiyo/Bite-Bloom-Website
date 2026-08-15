@@ -1,123 +1,93 @@
-# Bite & Bloom — Project Architecture Rules
+# Bite & Bloom — Engineering and Security Rules
 
-Production-grade web application development rules and standards for the Bite&Bloom Website platform.
+**Last reviewed:** 15 August 2026
 
----
+These rules apply to the Bite & Bloom website and its server-backed commerce workflows. They describe the current repository architecture as well as the security standard required before production.
 
-## 📋 Table of Contents
+## Technology and architecture
 
-1. [Mandatory Technology Stack](#-mandatory-technology-stack)
-2. [Coding Standards](#-coding-standards)
-3. [Security Requirements](#-security-requirements)
-4. [Reverse Engineering Mitigation](#-reverse-engineering-mitigation)
-5. [File Structure](#-file-structure)
-6. [Before Any Modification](#-before-any-modification)
+| Area | Rule |
+| --- | --- |
+| Web application | Use the pinned Next.js/React versions in `package.json`; do not silently upgrade the framework during feature work. |
+| Language | Use TypeScript for pages, components, hooks, utilities, and server code. Avoid `any`; type external input explicitly. |
+| API | Use Next.js Route Handlers under `frontend/app/api`. Do not create a parallel backend service without an explicit architecture decision. |
+| Database | Use Prisma with PostgreSQL; Neon pooled `DATABASE_URL` is the intended runtime connection. |
+| Authentication | Use Auth.js for sessions and bcrypt for password comparison/hashing. |
+| Payments | Keep Safaricom Daraja credentials and callbacks server-only. |
+| Media | Use Cloudflare R2 for production media when the upload workflow is implemented. |
+| Email/messaging | Use Resend and WhatsApp Cloud API only through server-side integrations when configured. |
+| Hosting | Target Vercel or Cloudflare-compatible deployment only after the deployment contract is documented and verified. |
 
----
+The active server boundary is `frontend/lib/server`. The root `backend/` directory is not a running API. Root configuration extends the frontend TypeScript project.
 
-## 🛠 Mandatory Technology Stack
+## Repository structure
 
-### Frontend
-
-| Technology | Requirement |
-| ---------- | ----------- |
-| **Next.js** | Latest stable version |
-| **React** | Latest stable version |
-| **TypeScript** | For all React Components, hooks, utilities and frontend logic |
-| **JavaScript** | Only when required by external libraries or build tools |
-| **Hosting** | Cloudflare or Vercel (mostly Vercel) |
-
-### Backend
-
-| Technology | Requirement |
-| ---------- | ----------- |
-| **Node.js** | Runtime |
-| **Next.js** | API routes or dedicated Node.js services |
-| **TypeScript** | For all backend code |
-| **JavaScript** | Only when absolutely necessary |
-| **Database** | Neon PostgreSQL Database, Auth.js Authentication & Server Actions Middleware (Next.js) |
-| **API** | Next.js API routes will do the Web Service work |
-| **ORM** | Prisma for schemas, queries and type safety cleaning |
-| **Storage** | Cloudflare R2 Storage |
-| **Payments**|Mpesa Daraja API
-| **Email** | Resend |
-| **Messaging** | WhatsApp Cloud APIs |
-| **Database URL** | When setting up Database URL in Prisma, use Neon's Pooled Connection string (`-pooler` in the host address) rather than the direct connection string |
-
----
-
-## 📝 Coding Standards
-
-1. Always use TypeScript (`.ts` and `.tsx` files) by default.
-2. Avoid plain JavaScript unless there is a documented technical reason.
-3. Use strict TypeScript typing.
-4. No use of `any` unless unavoidable.
-5. Use reusable React components.
-6. Follow clean architecture principles.
-7. Separate frontend, backend and shared code.
-8. Use environment variables for secrets.
-9. Never hardcode API keys, passwords, tokens or database credentials.
-
----
-
-## 🔐 Security Requirements
-
-1. All sensitive business logic must remain on the backend.
-2. Never expose secret keys to the frontend.
-3. Validate all inputs on both client and server.
-4. Implement authentications and authorization checks on the server.
-5. Sanitize user-generated content.
-6. Use HTTPS-only API communication.
-7. Implement rate limiting for public APIs.
-8. Use secure password hashing (bcrypt or Argon2).
-9. Use JWT or secure session management.
-10. Protect against XSS, CSRF, SQL Injection, and SSRF attacks.
-11. Bot Protection by Cloudflare Turnstile.
-12. Web Application Firewall by Cloudflare.
-
----
-
-## 🛡️ Reverse Engineering Mitigation
-
-1. Keep proprietary algorithms on the backend.
-2. Never expose database queries to the frontend.
-3. Never expose internal business rules to browser code.
-4. Minimize frontend exposure to sensitive logic.
-5. Use code splitting and production builds.
-6. Store sensitive calculations on the server.
-7. Use API gateways and server-side validation.
-
----
-
-## 📁 File Structure
-
-```
-/frontend
-  /components
-  /hooks
-  /pages
-  /app
-  /styles
-
-/backend
-  /controllers
-  /services
-  /middleware
-  /routes
+```text
+frontend/
+  app/                 App Router pages, layouts, and app/api Route Handlers
+  components/          Reusable UI and feature components
+  hooks/ store/ types/ Client hooks, state, and domain types
+  lib/                 Shared helpers and server-only services
+  styles/              Theme and visual style modules
+prisma/
+  schema.prisma        Database schema
+  seed.ts              Idempotent development seed
+docs/architecture/     Data and workflow boundaries
 ```
 
----
+Keep reusable server helpers outside route files. Route modules should export only supported HTTP handlers and route configuration.
 
-## ⚠️ Before Any Modification
+## Coding standards
 
-When creating, writing or editing files:
+1. Preserve the existing responsive Bite & Bloom visual language unless a design change is requested.
+2. Prefer small reusable components and narrow patches; avoid unrelated formatting churn.
+3. Validate external input at the server boundary and return consistent API errors.
+4. Keep database queries and provider credentials out of browser bundles.
+5. Recalculate prices, discounts, availability, delivery charges, and payment state on the server.
+6. Use Prisma transactions for checkout, reservations, payment state changes, refunds, inventory changes, role changes, and other multi-record mutations.
+7. Use immutable order/item/address snapshots; historical orders must not depend on mutable catalog values.
+8. Make callbacks, scheduled jobs, retries, and notification commands idempotent.
+9. Provide loading, empty, error, disabled, and unavailable states for user-facing data flows.
+10. Use accessible labels, keyboard paths, focus states, sufficient contrast, touch-friendly controls, and reduced-motion behavior.
 
-1. Check whether the change belongs to frontend or backend.
-2. Use TypeScript by default.
-3. Follow the existing project architecture rules.
-4. Do not introduce new framework without approval.
-5. Maintain compatibility with Next.js, React, Node.js, TypeScript and JavaScript.
+## Security requirements
 
----
+- Never commit credentials, tokens, private URLs, database strings, or real customer data.
+- Never put database, Auth.js, Daraja, R2, or scheduler secrets in `NEXT_PUBLIC_*` variables.
+- Authenticate and authorize every protected API request on the server. UI role selectors and hidden buttons are not security boundaries.
+- Enforce customer ownership for accounts, addresses, orders, wishlist items, and reviews.
+- Restrict admin operations to the server and audit privileged changes.
+- Reject altered prices, invalid variant/customization IDs, unavailable inventory, invalid coupons, forged order states, duplicate callbacks, and unauthorized order numbers.
+- Hash passwords with bcrypt or Argon2. Use short-lived, single-use verification/reset tokens and do not log raw tokens.
+- Treat uploaded filenames, MIME types, dimensions, message content, addresses, and analytics properties as untrusted input.
+- Add rate limiting, CSRF protection where applicable, secure headers/CSP, abuse controls, and Turnstile/WAF before public launch.
+- Use HTTPS for production APIs and require HTTPS for the M-Pesa callback URL.
+- Redact secrets and unnecessary personal/payment data from logs and analytics.
 
-> **NB:** These rules are mandatory and must be followed for every code generation, refactoring, bug fixing, feature addition, and deployment task.
+## Commerce invariants
+
+- Available inventory is `quantityOnHand - quantityReserved`.
+- Catalog and customization prices come from the database/configuration, not the browser.
+- A checkout creates durable order/payment/reservation records before initiating external payment.
+- Reservation release, consumption, and expiry happen exactly once.
+- Order status can change only through the server state machine.
+- M-Pesa callbacks are deduplicated and checked against the expected order/payment.
+- Refunds append records; they do not rewrite original payment history.
+
+## Before any modification
+
+1. Read the relevant source, schema, route, and current documentation before adding a duplicate feature.
+2. Confirm whether the change is public, customer-authenticated, admin-only, server-only, or configuration-only.
+3. Preserve unrelated user changes and use `apply_patch` for local edits.
+4. Update the relevant README/handoff/architecture note when behavior, setup, routes, or environment variables change.
+5. Run at least `node .\node_modules\typescript\bin\tsc --noEmit -p .\frontend\tsconfig.json` for TypeScript changes on this Windows checkout; run lint, build, and focused smoke tests in proportion to risk.
+6. If a provider, credential, business rule, migration, or deployment step is missing, record it as a blocker rather than simulating success.
+
+## Source of truth
+
+- Product implementation: `frontend/app` and `frontend/lib/server`.
+- Database contract: `prisma/schema.prisma`.
+- Development data: `prisma/seed.ts`.
+- Environment names: `.env.example`.
+- Workflow boundaries: [`docs/architecture/database-and-workflows.md`](docs/architecture/database-and-workflows.md).
+- Current progress and release blockers: [`PROJECT_HANDOFF.md`](PROJECT_HANDOFF.md) and [`PROJECT_FEATURES_IMPLEMENTATION_PLAN.md`](PROJECT_FEATURES_IMPLEMENTATION_PLAN.md).

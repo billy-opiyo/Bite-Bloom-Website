@@ -1,162 +1,122 @@
-# Bite & Bloom Cake Website — Project Handoff
+# Bite & Bloom — Current Project Handoff
 
-**Last reviewed:** 8 August 2026  
-**Repository status:** UI prototype and database design exist; the production application foundation is now being implemented.
+**Last reviewed:** 15 August 2026
+**Repository state:** active MVP implementation; production launch is still blocked by migrations, provider setup, testing, and incomplete admin UI integration.
 
 ## Executive summary
 
-The project currently renders two polished, interactive client-side screens:
+The repository has moved beyond the original browser-only prototype. The live architecture is now a Next.js App Router application with Prisma-backed Route Handlers and server-only services under `frontend/lib/server`.
 
-- Storefront: `frontend/app/(public)/page.tsx`
-- Admin dashboard: `frontend/app/admin/page.tsx`
+The customer journey is substantially implemented: catalog data, product detail, cart, coupon, checkout, inventory reservation, order creation, M-Pesa/COD payment foundations, account resources, tracking, reviews, contact, and newsletter records have server routes. Authentication and coarse admin protection are also present.
 
-Both are large self-contained prototypes. Their data is hard-coded and interactions only update React state in the browser. No storefront or admin action yet persists data, authenticates a user, processes a payment, uploads a file, or sends a notification. A server-only Prisma foundation and `GET /api/health` endpoint now exist, but no feature API has been connected to either interface.
+The remaining work is primarily integration and release hardening. The visual admin page still contains sample data in several tabs, media upload is not connected to R2, external providers are not configured, the database has no migration history, and automated/staging verification is absent.
 
-The Prisma schema is a strong design baseline for a complete cake-commerce system. However, it has no migration files, seed implementation, database configuration, Prisma client wrapper, or queries/services connected to it. All currently created backend TypeScript files are empty.
+## Implemented surface
 
-## What is implemented
+### Public pages
 
-| Area | Current state | Notes |
-| --- | --- | --- |
-| Next.js app shell | Present | Root layout, global CSS, loading state, and 404 page exist. |
-| Public home/storefront UI | Partially connected | Catalog browsing, search/filter/sort, cake details/customization modal, cart drawer, checkout modal, tracking section, FAQ, contact, and dark-mode UI are in one page file. Catalogue pricing/categories hydrate from the public API when available. |
-| Admin UI | Partially connected | Cake management, review moderation, and inventory hydrate protected APIs; cake edits, review moderation, and stock restocks persist. Remaining tabs still contain prototype interactions. |
-| Styling | Present | `frontend/app/globals.css` contains the actual styling. |
-| Prisma schema | Present | Models cover identity/RBAC, catalog, cart/orders/payments, inventory, delivery, media, notifications, analytics, loyalty, and audit logs. |
-| Server foundation | Present | Server-only environment/Prisma helpers, health check, public cake list/detail APIs, protected admin cake list/create APIs, and Auth.js credentials endpoints are available. |
-| Admin access control | Present | Next.js middleware restricts `/admin` to users with `admin` or `owner` roles; `/login` provides the credentials sign-in form. |
-| Development seed data | Present | `prisma/seed.ts` idempotently seeds system roles/permissions, a small catalogue, inventory, and `SWEET10`. |
-| Architecture guidance | Present | `docs/architecture/database-and-workflows.md` documents the desired secure workflows. |
+The App Router contains real pages for:
 
-## Frontend work still required
+`/`, `/about`, `/cakes`, `/cakes/[slug]`, `/cakes/[slug]/reviews`, `/categories/[slug]`, `/cart`, `/checkout`, `/contact`, `/faq`, `/offers`, `/tracking`, `/privacy`, `/terms`, and `/cookies`.
 
-### 1. Break the prototype pages into reusable frontend code
+The public layout includes the branded navigation/footer, responsive actions, theme support, loading/not-found states, sitemap, robots metadata, and manifest support.
 
-The two existing pages embed their own types, icons, sample data, business calculations, and UI. Move these responsibilities into the existing empty folders before adding more features:
+### Authentication and account
 
-| Empty area | Required implementation |
+- Auth.js credentials login uses Prisma and bcrypt with JWT sessions.
+- Registration creates a customer account and can associate eligible prior guest orders by email.
+- Forgot-password, reset-password, and email-verification pages/routes use database verification tokens with expiry.
+- Middleware protects `/admin/:path*` for sessions carrying the `admin` or `owner` role.
+- Account routes cover profile updates, addresses, order history/detail, and wishlist operations.
+- Google OAuth, provider email delivery, granular permission checks, invitations, and full account deletion/retention workflows are not configured or complete.
+
+### Catalog and cart
+
+- `/api/cakes` and `/api/cakes/[slug]` read active Prisma catalog records.
+- Cake variants include server-calculated available quantity and an availability flag.
+- Active customizations and values are returned on product detail and validated again when added to cart.
+- Guest carts are persisted with the HTTP-only `bite_bloom_cart` cookie.
+- Cart item changes and coupon operations are server-backed; prices are re-read from the catalog.
+- The seeded catalog contains three cakes, three size variants per cake, inventory, and one `SWEET10` coupon.
+- Search/filter pagination, complete production imagery, R2 uploads, all planned categories, and richer catalog administration remain incomplete.
+
+### Checkout, payment, and inventory
+
+- Checkout validates contact details, delivery/pickup, scheduled date, fixed delivery slots, notes, payment method, cart contents, coupons, customizations, and inventory.
+- The server creates immutable order/item/address snapshots and inventory reservations in a transaction.
+- Reservation availability is `quantityOnHand - quantityReserved`.
+- M-Pesa Daraja STK Push, idempotent callback handling, and guarded payment retry are implemented behind environment configuration.
+- Cash on delivery creates a pending cash payment, confirms the order path, and opens a prefilled WhatsApp confirmation link.
+- The order transition service consumes reservations when production starts, releases them for cancellation/failure, and settles pending cash payment at delivery.
+- The reservation expiry job is protected by `CRON_SECRET` and releases active expired reservations in bounded batches.
+- Payment query/reconciliation, refunds, checkout idempotency, service-area/fee rules, slot capacity, and scheduled-job hosting are still required.
+
+### Orders, tracking, reviews, and operations
+
+- Customer order lookup supports order number plus email; authenticated customers can view owned order records.
+- The server order state machine records status history and rejects invalid transitions.
+- Admin APIs list/update orders, add notes, create/update shipments, and expose shipment events.
+- Inventory list and adjustment APIs create stock movement records and protect reserved quantities.
+- Verified delivered-order customers can submit one pending review per cake/order combination.
+- Public reviews and protected moderation are implemented; moderation writes an audit log.
+- Protected date-range analytics returns sales, paid revenue, customer-repeat, daily, and top-cake metrics.
+- Delivery staff assignment, proof of delivery, courier/ETA integration, invoices, exports, refunds, notifications, and analytics aggregation remain incomplete.
+
+## Admin status
+
+`frontend/app/admin/page.tsx` is protected by `frontend/middleware.ts` and already connects some catalog, review, and inventory interactions to APIs. It is not yet a complete operational console.
+
+| Area | Current state |
 | --- | --- |
-| `frontend/components/cakes/` | `CakeCard`, gallery, filters, search, sort, and customization components. |
-| `frontend/components/cart/` | Cart line items, cart summary, coupon form, and loading/error handling. |
-| `frontend/components/checkout/` | Address, delivery, checkout, and payment components. |
-| `frontend/components/homepage/` | Hero, categories, featured cakes, promotions, testimonials, delivery areas, CTA. |
-| `frontend/components/layout/` | Navbar, footer, mobile menu, search, theme toggle. |
-| `frontend/components/tracking/` | Status badge, order timeline, and map/tracking view. |
-| `frontend/components/ui/` and `components/shared/` | Button, input, modal, drawer, badge, spinner, tooltip, empty/error/loading states. |
-| `frontend/types/` | Typed API/domain contracts for cakes, orders, reviews, and users. |
-| `frontend/lib/` | API client, constants, helpers, and client-side validation. |
-| `frontend/hooks/` and `frontend/store/` | Auth, cart, order, debounce, theme, wishlist state and data fetching. |
-| `frontend/styles/` | Either populate these style modules or remove them and keep a documented global-CSS strategy. |
+| Catalog | API-backed list/create/update foundation; media, category management, and full editor integration remain. |
+| Reviews | API-backed loading and moderation UI. |
+| Inventory | API-backed listing/restock foundation; purchase orders and richer stock workflow remain. |
+| Orders | Protected APIs exist; several page sections still use sample state and need connection. |
+| Delivery | Shipment APIs exist; the page remains mostly presentation/prototype UI. |
+| Customers | Protected list/detail APIs exist; the page still displays sample directory/metrics. |
+| Analytics | Protected query exists; charts still display sample values. |
+| Staff and roles | Seeded role/permission data exists; staff management UI/API is not implemented. |
 
-### 2. Create the missing routes/pages
+The role selector in the page must never be treated as authorization. Server session checks are the authority.
 
-The following route folders exist but contain no page files. The home page currently uses modals and anchor links instead of real routes.
+## Database and configuration status
 
-| Route group | Missing pages/features |
-| --- | --- |
-| `(public)` | About, cake catalogue, cake detail, cart, categories, checkout, contact, FAQ, offers, reviews, and order tracking. |
-| `(auth)` | Login, registration, forgot-password, reset-password, email verification. |
-| `account` | An authenticated `/account` page now lets customers view/update their profile, save addresses, view recent orders, and manage wishlist items using protected APIs. Customer-owned order-detail/tracking pages are also available. Add dedicated loyalty UI. |
-| `admin` | Prefer nested protected routes for dashboard, catalog, orders, delivery, customers, analytics, inventory, reviews, and staff rather than one stateful page. |
+- `prisma/schema.prisma` is the executable schema source and includes Auth.js, catalog, commerce, payment, shipment, inventory, review, wishlist, loyalty, media, notification, contact/newsletter, analytics, and audit models.
+- `prisma/seed.ts` is idempotent for roles, permissions, optional owner, sample catalog/inventory, and `SWEET10`.
+- `prisma/migrations/` exists but contains no migration files.
+- `.env.example` documents the current environment contract. Local `.env.local` values must remain private.
+- The root `backend/` directory is not the active backend. Do not add a parallel server without an explicit architecture decision.
+- The package name remains `cake-website`, while the product and repository documentation use Bite & Bloom.
 
-### 3. Replace browser-only storefront behaviour
+## Release blockers
 
-The following existing behaviours are demos and must be server-backed:
+1. Create and review the initial Prisma migration; verify a disposable restore path before production deployment.
+2. Configure separate staging and production values for Neon, Auth.js, Daraja, WhatsApp, email, media, scheduler, and public URLs.
+3. Connect the remaining admin screens to protected APIs and remove sample metrics/actions from operational views.
+4. Implement and verify R2 media upload/attachment, email/WhatsApp notification delivery, payment reconciliation/refunds, and job scheduling.
+5. Add unit/API/browser tests and CI checks for authorization, price tampering, invalid variants, coupon abuse, duplicate checkout/callbacks, reservation expiry, and order transitions.
+6. Complete business decisions for delivery coverage/fees, pickup, slots, cancellation/refunds, privacy/retention, final catalog, and legal copy.
 
-- Catalog, category, prices, ratings, images, ingredient/allergen data, and availability are static arrays.
-- Search, filters, and sorting only work against that static array.
-- Cake pricing, toppings, add-ons, free-delivery threshold, and coupon discounts are calculated in the browser. The server must be authoritative.
-- Cart, saved-for-later items, coupon state, checkout customer details, and the placed order disappear on refresh.
-- Coupon codes are hard-coded as `SWEET10` and `BLOOM500`.
-- The inspiration-image chooser only stores the filename; it does not upload a file.
-- Checkout creates a random `BB-####` number and shows a confirmation without creating an order, reserving inventory, charging/payment instruction, or sending a notification.
-- Order tracking is a locally created order only; it cannot retrieve a real order or live shipment events.
-- Sign-in, registration, Google sign-in, account summary, loyalty points, saved addresses, and sign-out are simulated React state.
-- Newsletter and contact forms only show a toast. The contact form does not capture the name/email field values.
-- Contact details, business address, social accounts, delivery areas, and map are hard-coded placeholders that need confirmed business configuration.
+## Recommended next sequence
 
-### 4. Replace browser-only admin behaviour
+1. Lock business configuration and create the migration baseline.
+2. Finish catalog/media and connect the public/admin catalog flows.
+3. Connect admin orders, delivery, customers, analytics, and inventory screens.
+4. Add notification/payment reconciliation providers and schedule reservation expiry.
+5. Add automated tests, staging data, backup/restore verification, security headers/rate limits, and deployment runbooks.
+6. Perform mobile/browser smoke testing across catalog, cart, checkout, account, tracking, and admin before launch.
 
-`frontend/app/admin/page.tsx` has no authentication or authorization and uses sample arrays/counters. It must not be deployed as an admin interface in its current form.
+## Validation notes
 
-| Admin feature shown | Missing production implementation |
-| --- | --- |
-| Dashboard | Real metrics and charts with date-range query support. |
-| Cake management | Persisted create/read/update/archive actions, categories/variants/customizations, real image upload, publish state, and audit logs. |
-| Orders | Protected order listing, state transitions, shipment creation/events, and persisted staff notes are available. Connect these controls to the admin screen; staff assignment, print/export, refunds, and customer cancellation flows remain. |
-| Delivery | Staff/courier records, shipment creation, driver assignment, delivery events, map/ETA provider integration. |
-| Customers | Protected paginated directory and customer order-history APIs are available, including guest-checkout customers grouped by email. Connect the admin screen, add carefully scoped export and privacy/retention controls. |
-| Analytics | Protected date-range analytics API returns sales, paid-revenue, customer-repeat, daily, and top-cake metrics. Connect the dashboard charts and add exports/event aggregation. |
-| Inventory | Variant/ingredient decision, stock adjustments with reason, reservations, low-stock alerts, purchase-order workflow if required. |
-| Reviews | Customer review creation, moderation, and public display. |
-| Staff & roles | Real invitations, role assignment, server-side permission enforcement, session/login activity. |
+The documentation describes source-level implementation found in the repository on 15 August 2026. The direct TypeScript check passes; lint completes with two existing React hook dependency warnings in the home/account pages. A live database, Daraja callback, email delivery, external media upload, and production deployment were not verified by this handoff. Run the checks in [README.md](README.md#verification) after configuring a safe development database.
 
-The current role selector only changes what the page displays; it does not protect any action.
+## Key files
 
-## Backend work still required
-
-### Empty backend source files
-
-Every TypeScript file under `backend/src/` is currently 0 bytes. This includes:
-
-- Controllers: analytics, auth, cake, cart, customer, inventory, order, review.
-- Routes: analytics, auth, cake, cart, inventory, order.
-- Services: analytics, auth, cake, cart, inventory, notification, order, Resend email, uploads, WhatsApp.
-- Middleware: auth, CSRF, rate limit, role, Turnstile, validation.
-- Utilities/types: errors, JWT, logger, permissions, response, shared backend types.
-
-There is no separate backend application entry point or running HTTP server. The project now uses the recommended Next.js Route Handler approach: the first handler is `GET /api/health`, and server-only helpers live in `frontend/lib/server/`. Continue that architecture consistently rather than creating a parallel standalone API service.
-
-Use Next.js Route Handlers/Server Actions with server-only services. If a separate service is later required, decide that explicitly and provide its own `package.json`, build/dev scripts, entry point, CORS policy, and deployment configuration.
-
-### Required server capabilities
-
-Implement these in the order below. The data models and workflow rules are already described in `docs/architecture/database-and-workflows.md`.
-
-1. **Foundation (in progress)** — server-only environment access, Prisma client singleton, standard success/error response helpers, and `GET /api/health` are implemented. Add structured logging, schema validation, and feature API contracts.
-2. **Database delivery (in progress)** — `prisma/seed.ts` now provides idempotent development roles, permissions, a small catalogue, inventory, and an optional owner account. Generate and commit the initial migration from `prisma/schema.prisma`, then document database deployment/backup procedure.
-3. **Authentication and access control (in progress)** — Auth.js credentials login, bcrypt password comparison, JWT sessions, `/login`, customer registration at `/register`, and `/admin` role middleware are implemented. Registration assigns the customer role and securely links prior guest orders with the same email. Email verification/reset flows, granular RBAC, broader ownership checks, and secure staff invitations remain.
-4. **Catalog (in progress)** — public `GET /api/cakes` returns active cake/variant/category data. Connect the storefront, add cake detail/category endpoints, media, customizations, and protected admin CRUD/archive endpoints.
-5. **Cart and checkout (in progress)** — guest carts, server-side validation/calculation, server-enforced configured customization prices, one active coupon per cart, coupon-limit/redemption enforcement, delivery pricing, inventory reservation transactions, and immutable order snapshots are implemented. Add promotions, session-cart merge, and checkout idempotency.
-6. **Payments (in progress)** — M-Pesa Daraja STK Push is implemented with server-side OAuth, a checkout request, an idempotent callback, and a guarded retry endpoint for an order whose initial STK request never started. Cash on Delivery creates a confirmed order with a pending cash payment and opens a prefilled WhatsApp confirmation message. Configure Daraja sandbox/production credentials and public HTTPS callback URL, add payment-query handling and refunds before launch.
-7. **Order operations (in progress)** — customer order tracking plus protected admin order listing/status transitions are implemented. The transition service consumes reservations when production begins, releases them on cancellation/failure, and settles pending cash payment at delivery. Connect the admin orders screen, add notes, shipments/courier assignment, invoices, and exports.
-8. **Inventory and fulfilment (in progress)** — protected inventory list/adjustment APIs create audited stock movements and prevent adjustments below active reservations. Shipment creation/events are available. The protected reservation-expiry job releases abandoned holds in bounded batches. Connect remaining admin controls, schedule the job, automate low-stock notifications, and integrate a courier if required.
-9. **Media and messaging** — Cloudflare R2 presigned uploads/verification/cleanup, Resend transactional templates, WhatsApp Cloud API templates/webhooks, notification delivery records/retries.
-10. **Analytics and moderation (in progress)** — verified customers can submit a pending review for a delivered cake order; published reviews have a public cake endpoint and protected admin listing/publish/reject moderation with an audit log. Protected analytics queries now return date-range sales and customer metrics. Connect analytics data to dashboard charts; validated event collection, daily aggregation job, and exports remain.
-11. **Security/operations** — rate limiting, CSRF protection, Turnstile, secure headers/CSP, secret management, monitoring, error reporting, background-job scheduling, backups and restore test.
-
-## Data and configuration gaps
-
-- `.env` is empty. `.env.example` now documents the required Neon `DATABASE_URL`; add future variables there as integrations are implemented.
-- No database connection is configured. The intended production database is Neon PostgreSQL using the pooled connection string.
-- `prisma/seed.ts` is empty and `prisma/migrations/` contains no migration files.
-- No payment provider, Resend account/configuration, WhatsApp Cloud configuration, Cloudflare R2 bucket, or Turnstile keys are configured.
-- `middleware.ts` at the repository root is empty; it needs auth/route protection and any relevant request policy.
-- `tailwind.config.ts` is empty. Tailwind is installed but current UI styling is in `globals.css`; either configure Tailwind or remove the unused dependency/config.
-- `README.md` is empty. Add local setup, required services, environment variables, database commands, test commands, and deploy/runbook instructions.
-- There are no automated tests, test configuration, CI workflow, or deployment configuration in the repository.
-
-## Suggested delivery sequence
-
-1. Preserve the current pages as a visual reference, then extract shared components/types and add real route structure.
-2. Establish database, migrations, seed data, Prisma access, and the chosen API architecture.
-3. Implement auth/RBAC before exposing `/admin`; add middleware protection immediately.
-4. Build catalog + admin catalog management, then connect the public catalogue to it.
-5. Implement cart, secure checkout transaction, payment flow, order notifications, and customer tracking.
-6. Implement admin order/inventory/delivery workflows and operational reports.
-7. Add uploads, reviews, loyalty, analytics, account features, testing, monitoring, and deployment hardening.
-
-## Validation status
-
-- The current source tree was reviewed on 8 August 2026.
-- A production build was started for verification but did not finish within the available 60-second command limit, so compilation should be rerun locally with `npm run build` before the next implementation task.
-- `git status` showed a pre-existing modification to `tsconfig.json`; this handoff does not alter it.
-
-## Key files for the next developer
-
-- `frontend/app/(public)/page.tsx` — visual and interaction reference for the storefront prototype.
-- `frontend/app/admin/page.tsx` — visual and interaction reference for the admin prototype.
-- `frontend/app/globals.css` — current styling source.
-- `prisma/schema.prisma` — implemented database model definition.
-- `docs/architecture/database-and-workflows.md` — required server-side boundaries and workflows.
-- `rules.md` — required technology stack, architecture, and security rules.
+- `frontend/app` — pages and Route Handlers.
+- `frontend/lib/server` — server-only business and integration helpers.
+- `frontend/middleware.ts` — coarse admin route protection.
+- `prisma/schema.prisma` — data model.
+- `prisma/seed.ts` — development seed.
+- `docs/architecture/database-and-workflows.md` — data and workflow boundaries.
+- `PROJECT_FEATURES_IMPLEMENTATION_PLAN.md` — current progress and next work.
+- `rules.md` — engineering and security constraints.
