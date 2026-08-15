@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import MobileActionBar from "../components/layout/MobileActionBar";
+import SplashGate from "../components/layout/SplashGate";
 
 export const metadata: Metadata = {
   title: "Bite & Bloom — Cakes made for your moment",
@@ -31,7 +33,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>{children}</body>
+      <body><SplashGate>{children}</SplashGate><MobileActionBar /></body>
     </html>
   );
 }
