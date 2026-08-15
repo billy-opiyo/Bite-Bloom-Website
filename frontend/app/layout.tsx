@@ -13,9 +13,9 @@ export const metadata: Metadata = {
   twitter: { card: "summary", title: "Bite & Bloom — Cakes made for your moment", description: "Thoughtful cakes, baked fresh and delivered across Nairobi." },
   other: { "theme-color": "#8b431d" },
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
-    apple: "/favicon.svg",
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/favicon.png",
   },
 };
 
