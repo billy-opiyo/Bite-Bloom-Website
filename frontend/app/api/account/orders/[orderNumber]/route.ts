@@ -18,7 +18,7 @@ export async function GET(_: NextRequest, { params }: { params: { orderNumber: s
     const order = await getPrismaClient().order.findFirst({
       where: { orderNumber, userId: session.user.id },
       include: {
-        items: { select: { cakeName: true, variantName: true, sku: true, quantity: true, unitPrice: true, lineTotal: true, customizations: true } },
+        items: { select: { cakeName: true, variantId: true, variantName: true, sku: true, quantity: true, unitPrice: true, lineTotal: true, customizations: true } },
         addresses: { where: { type: "SHIPPING" }, select: { recipientName: true, line1: true, line2: true, city: true, region: true, postalCode: true, country: true, phone: true } },
         payments: { select: { provider: true, status: true, amount: true, currency: true, paidAt: true } },
         shipment: { include: { events: { orderBy: { occurredAt: "asc" } } } },
@@ -31,6 +31,8 @@ export async function GET(_: NextRequest, { params }: { params: { orderNumber: s
       status: order.status,
       paymentStatus: order.paymentStatus,
       fulfillmentType: order.fulfillmentType,
+      scheduledFor: order.scheduledFor,
+      deliverySlot: order.deliverySlot,
       currency: order.currency,
       subtotal: Number(order.subtotal),
       discountTotal: Number(order.discountTotal),

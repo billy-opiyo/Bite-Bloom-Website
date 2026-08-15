@@ -1,7 +1,6 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
-import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -24,13 +23,7 @@ export default function RegisterPage() {
         setError(payload?.error?.message ?? "Unable to create your account.");
         return;
       }
-      const result = await signIn("credentials", { email, password, redirect: false });
-      if (result?.error) {
-        router.push("/login");
-        return;
-      }
-      router.push("/");
-      router.refresh();
+      router.push("/login?registered=1");
     } catch {
       setError("Unable to create your account. Please try again.");
     } finally {

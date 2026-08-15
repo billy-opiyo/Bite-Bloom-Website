@@ -21,7 +21,7 @@ type CartWithItems = Prisma.CartGetPayload<{ include: typeof cartInclude }>;
 export type CartSummary = {
   id: string;
   currency: string;
-  items: Array<{ id: string; quantity: number; unitPrice: number; variantId: string; variantName: string; cakeName: string; cakeSlug: string; customizations: unknown }>;
+  items: Array<{ id: string; quantity: number; unitPrice: number; variantId: string; cakeId: string; variantName: string; cakeName: string; cakeSlug: string; customizations: unknown }>;
   subtotal: number;
   coupons: Array<{ code: string; description: string | null; discountType: "PERCENTAGE" | "FIXED_AMOUNT"; value: number; maximumDiscount: number | null }>;
 };
@@ -32,6 +32,7 @@ export function serializeCart(cart: CartWithItems): CartSummary {
     quantity: item.quantity,
     unitPrice: Number(item.unitPrice),
     variantId: item.variantId,
+    cakeId: item.variant.cake.id,
     variantName: item.variant.name,
     cakeName: item.variant.cake.name,
     cakeSlug: item.variant.cake.slug,

@@ -20,7 +20,7 @@ function parseNote(value: unknown): NoteInput | null {
 }
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
-  if (!(await getAdminSession())) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
+  if (!(await getAdminSession("order:read"))) return apiError("UNAUTHORIZED", "Order read permission is required.", 401);
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Orders are not configured yet.", 503);
   try {
     const order = await getPrismaClient().order.findUnique({
@@ -35,7 +35,7 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
 }
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getAdminSession();
+  const session = await getAdminSession("order:update");
   if (!session) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Orders are not configured yet.", 503);
   const input = parseNote(await request.json().catch(() => null));

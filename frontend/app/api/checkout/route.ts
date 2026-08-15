@@ -9,12 +9,13 @@ import { couponDiscount, couponIsActive } from "../../../lib/server/coupons";
 import { CustomizationValidationError, resolvedCustomizationUnitPrice } from "../../../lib/server/customizations";
 import { hasDatabaseConfiguration } from "../../../lib/server/env";
 import { hasMpesaConfiguration, initiateStkPush, normalizeMpesaPhone } from "../../../lib/server/mpesa";
+import { getDeliverySlotAvailability } from "../../../lib/server/delivery-slots";
 import { getPrismaClient } from "../../../lib/server/prisma";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type CheckoutInput = { name: string; email: string; phone: string; fulfillmentType: "DELIVERY" | "PICKUP"; paymentMethod: "MPESA" | "CASH_ON_DELIVERY"; address?: string; notes?: string; scheduledFor: Date; deliverySlot: string };
+type CheckoutInput = { name: string; email: string; phone: string; fulfillmentType: "DELIVERY" | "PICKUP"; paymentMethod: "MPESA" | "CASH_ON_DELIVERY"; address?: string; notes?: string; scheduledFor: Date; deliverySlot: string; idempotencyKey?: string };
 
 class CheckoutError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
@@ -33,8 +34,9 @@ function parseCheckout(value: unknown): CheckoutInput | null {
   const tomorrow = new Date(); tomorrow.setHours(0, 0, 0, 0); tomorrow.setDate(tomorrow.getDate() + 1);
   const maxDate = new Date(tomorrow); maxDate.setDate(maxDate.getDate() + 90);
   const validSlot = ["10:00am – 12:00pm", "12:00pm – 2:00pm", "3:00pm – 5:00pm"].includes(deliverySlot);
+  const idempotencyKey = typeof input.idempotencyKey === "string" && /^[A-Za-z0-9_-]{16,120}$/.test(input.idempotencyKey) ? input.idempotencyKey : undefined;
   if (!text(input.name, 2, 120) || !/^\S+@\S+\.\S+$/.test(email) || !text(input.phone, 7, 32) || !fulfillmentType || !paymentMethod || !scheduledFor || Number.isNaN(scheduledFor.getTime()) || scheduledFor < tomorrow || scheduledFor > maxDate || !validSlot || (fulfillmentType === "DELIVERY" && !text(input.address, 5, 500))) return null;
-  return { name: input.name.trim(), email, phone: input.phone.trim(), fulfillmentType, paymentMethod, scheduledFor, deliverySlot, ...(text(input.address, 1, 500) ? { address: input.address.trim() } : {}), ...(text(input.notes, 1, 2000) ? { notes: input.notes.trim() } : {}) };
+  return { name: input.name.trim(), email, phone: input.phone.trim(), fulfillmentType, paymentMethod, scheduledFor, deliverySlot, ...(idempotencyKey ? { idempotencyKey } : {}), ...(text(input.address, 1, 500) ? { address: input.address.trim() } : {}), ...(text(input.notes, 1, 2000) ? { notes: input.notes.trim() } : {}) };
 }
 
 function orderNumber(): string {
@@ -49,6 +51,10 @@ export async function POST(request: NextRequest) {
   if (input.paymentMethod === "MPESA" && !normalizeMpesaPhone(input.phone)) return apiError("VALIDATION_ERROR", "Enter a valid Kenyan M-Pesa phone number.", 400);
 
   try {
+    if (input.idempotencyKey) {
+      const existing = await getPrismaClient().order.findUnique({ where: { idempotencyKey: input.idempotencyKey }, select: { orderNumber: true, status: true, total: true, currency: true } });
+      if (existing) return apiSuccess({ orderNumber: existing.orderNumber, status: existing.status, total: Number(existing.total), currency: existing.currency, paymentInitiated: false, paymentMessage: "This checkout was already received." });
+    }
     const session = await getAuthenticatedSession();
     const { cart } = await getGuestCart(request);
     const order = await getPrismaClient().$transaction(async (tx) => {
@@ -70,6 +76,9 @@ export async function POST(request: NextRequest) {
         },
       });
       if (!freshCart || freshCart.items.length === 0) throw new CheckoutError(400, "Your cart is empty or has already been checked out.");
+
+      const selectedSlot = (await getDeliverySlotAvailability(input.scheduledFor)).find((slot) => slot.slot === input.deliverySlot);
+      if (!selectedSlot?.available) throw new CheckoutError(409, "That delivery slot is full. Please choose another time.");
 
       let subtotal = 0;
       for (const item of freshCart.items) {
@@ -104,7 +113,7 @@ export async function POST(request: NextRequest) {
       const initialStatus = input.paymentMethod === "CASH_ON_DELIVERY" ? "CONFIRMED" : "PENDING_PAYMENT";
       const order = await tx.order.create({
         data: {
-          orderNumber: orderNumber(), email: input.email, phone: input.phone, fulfillmentType: input.fulfillmentType, scheduledFor: input.scheduledFor, deliverySlot: input.deliverySlot,
+          orderNumber: orderNumber(), idempotencyKey: input.idempotencyKey, email: input.email, phone: input.phone, fulfillmentType: input.fulfillmentType, scheduledFor: input.scheduledFor, deliverySlot: input.deliverySlot,
           ...(session ? { user: { connect: { id: session.user.id } } } : {}), status: initialStatus, subtotal, discountTotal, deliveryFee, total, notes: input.notes,
           cart: { connect: { id: freshCart.id } },
           items: { create: freshCart.items.map((item) => { const unitPrice = resolvedCustomizationUnitPrice({ basePrice: item.variant.price, customizations: item.customizations, definitions: item.variant.cake.customizations }); return { cakeName: item.variant.cake.name, variantName: item.variant.name, sku: item.variant.sku, quantity: item.quantity, unitPrice, lineTotal: unitPrice * item.quantity, customizations: item.customizations as Prisma.InputJsonValue | undefined, cake: { connect: { id: item.variant.cakeId } }, variant: { connect: { id: item.variantId } } }; }) },
@@ -150,6 +159,10 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     if (error instanceof CheckoutError) return apiError("VALIDATION_ERROR", error.message, error.status);
+    if (input.idempotencyKey && error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const existing = await getPrismaClient().order.findUnique({ where: { idempotencyKey: input.idempotencyKey }, select: { orderNumber: true, status: true, total: true, currency: true } }).catch(() => null);
+      if (existing) return apiSuccess({ orderNumber: existing.orderNumber, status: existing.status, total: Number(existing.total), currency: existing.currency, paymentInitiated: false, paymentMessage: "This checkout was already received." });
+    }
     return apiError("DATABASE_UNAVAILABLE", "Unable to place the order right now. Please try again.", 503);
   }
 }

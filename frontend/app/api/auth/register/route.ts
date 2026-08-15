@@ -6,6 +6,7 @@ import { type NextRequest } from "next/server";
 import { apiError, apiSuccess } from "../../../../lib/server/api-response";
 import { hasDatabaseConfiguration } from "../../../../lib/server/env";
 import { getPrismaClient } from "../../../../lib/server/prisma";
+import { enforceRateLimit } from "../../../../lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,6 +24,8 @@ function parseRegistration(value: unknown): RegistrationInput | null {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = enforceRateLimit(request, "register", 5, 15 * 60 * 1000);
+  if (limited) return limited;
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Accounts are not configured yet.", 503);
   const input = parseRegistration(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Enter your name, a valid email, and a password of at least 12 characters.", 400);
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.$transaction(async (tx) => {
       const customerRole = await tx.role.findUnique({ where: { key: "customer" }, select: { id: true } });
       if (!customerRole) throw new Error("CUSTOMER_ROLE_MISSING");
-      const created = await tx.user.create({ data: { name: input.name, email: input.email, passwordHash, status: "ACTIVE" }, select: { id: true, name: true, email: true } });
+      const created = await tx.user.create({ data: { name: input.name, email: input.email, passwordHash, status: "PENDING" }, select: { id: true, name: true, email: true } });
       await tx.userRole.create({ data: { userId: created.id, roleId: customerRole.id } });
       await tx.order.updateMany({ where: { email: input.email, userId: null }, data: { userId: created.id } });
       await tx.auditLog.create({ data: { actorId: created.id, action: "CUSTOMER_REGISTERED", entityType: "User", entityId: created.id } });

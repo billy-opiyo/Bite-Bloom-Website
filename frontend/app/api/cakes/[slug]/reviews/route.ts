@@ -5,6 +5,7 @@ import { apiError, apiSuccess } from "../../../../../lib/server/api-response";
 import { authOptions } from "../../../../../lib/server/auth";
 import { hasDatabaseConfiguration } from "../../../../../lib/server/env";
 import { getPrismaClient } from "../../../../../lib/server/prisma";
+import { enforceRateLimit } from "../../../../../lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -45,6 +46,8 @@ export async function GET(_: NextRequest, { params }: { params: { slug: string }
 }
 
 export async function POST(request: NextRequest, { params }: { params: { slug: string } }) {
+  const rateLimitResponse = enforceRateLimit(request, "review-submit", 5, 15 * 60 * 1000);
+  if (rateLimitResponse) return rateLimitResponse;
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Reviews are not configured yet.", 503);
   const input = parseReview(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Provide a rating, review, name, and delivered order number.", 400);

@@ -589,6 +589,7 @@ model CartCoupon {
 model Order {
   id               String         @id @default(cuid())
   orderNumber      String         @unique
+  idempotencyKey   String?        @unique
   userId           String?
   cartId           String?        @unique
   email            String

@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const registered = searchParams.get("registered") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -47,6 +48,7 @@ export default function LoginPage() {
           <span>Password</span>
           <input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
         </label>
+        {registered && <p role="status">Account created. Check your email and verify it before signing in.</p>}
         {error && <p role="alert">{error}</p>}
         <button className="button button-dark" type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Signing in…" : "Sign in"}

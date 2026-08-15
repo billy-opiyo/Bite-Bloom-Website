@@ -4,11 +4,14 @@ import { apiError, apiSuccess } from "../../../lib/server/api-response";
 import { hasDatabaseConfiguration } from "../../../lib/server/env";
 import { parseContactMessage } from "../../../lib/server/public-forms";
 import { getPrismaClient } from "../../../lib/server/prisma";
+import { enforceRateLimit } from "../../../lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  const limited = enforceRateLimit(request, "contact", 5, 10 * 60 * 1000);
+  if (limited) return limited;
   const input = parseContactMessage(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Enter your name, email, and message.", 400);
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Contact messages are not configured yet.", 503);

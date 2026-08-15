@@ -20,7 +20,7 @@ function dayKey(value: Date): string {
 }
 
 export async function GET(request: NextRequest) {
-  if (!(await getAdminSession())) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
+  if (!(await getAdminSession("analytics:read"))) return apiError("UNAUTHORIZED", "Analytics permission is required.", 401);
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Analytics are not configured yet.", 503);
   const now = new Date();
   const defaultFrom = new Date(now);

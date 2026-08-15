@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET() {
-  if (!(await getAdminSession())) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
+  if (!(await getAdminSession("inventory:read"))) return apiError("UNAUTHORIZED", "Inventory read permission is required.", 401);
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Inventory is not configured yet.", 503);
   try {
     const items = await getPrismaClient().inventoryItem.findMany({

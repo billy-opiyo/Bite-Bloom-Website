@@ -54,6 +54,16 @@ export type CatalogCakeDetail = CatalogCake & {
   }>;
 };
 
+export type CatalogListOptions = {
+  page?: number;
+  pageSize?: number;
+  query?: string;
+  category?: string;
+  sort?: "featured" | "name" | "price-low" | "price-high";
+};
+
+export type CatalogPage = { items: CatalogCake[]; page: number; pageSize: number; total: number; hasMore: boolean };
+
 function serializeCake(cake: PublishedCake): CatalogCake {
   const mediaBaseUrl = (process.env.NEXT_PUBLIC_MEDIA_BASE_URL || process.env.R2_PUBLIC_URL || "").replace(/\/$/, "");
   return {
@@ -81,13 +91,30 @@ function serializeCake(cake: PublishedCake): CatalogCake {
 }
 
 export async function listPublishedCakes(): Promise<CatalogCake[]> {
-  const cakes = await getPrismaClient().cake.findMany({
-    where: { status: "ACTIVE" },
-    include: publishedCakeInclude,
-    orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
-  });
+  return (await listPublishedCakesPage({ page: 1, pageSize: 100 })).items;
+}
 
-  return cakes.map(serializeCake);
+export async function listPublishedCakesPage(options: CatalogListOptions = {}): Promise<CatalogPage> {
+  const page = Math.max(1, Math.floor(options.page ?? 1));
+  const pageSize = Math.min(100, Math.max(1, Math.floor(options.pageSize ?? 48)));
+  const query = options.query?.trim();
+  const where: Prisma.CakeWhereInput = {
+    status: "ACTIVE",
+    ...(options.category ? { categories: { some: { category: { slug: options.category } } } } : {}),
+    ...(query ? { OR: [{ name: { contains: query, mode: "insensitive" } }, { slug: { contains: query, mode: "insensitive" } }, { shortDescription: { contains: query, mode: "insensitive" } }] } : {}),
+  };
+  const orderBy: Prisma.CakeOrderByWithRelationInput[] = options.sort === "name"
+    ? [{ name: "asc" }]
+    : options.sort === "price-low"
+      ? [{ basePrice: "asc" }, { name: "asc" }]
+      : options.sort === "price-high"
+        ? [{ basePrice: "desc" }, { name: "asc" }]
+        : [{ isFeatured: "desc" }, { createdAt: "desc" }];
+  const [total, cakes] = await Promise.all([
+    getPrismaClient().cake.count({ where }),
+    getPrismaClient().cake.findMany({ where, include: publishedCakeInclude, orderBy, skip: (page - 1) * pageSize, take: pageSize }),
+  ]);
+  return { items: cakes.map(serializeCake), page, pageSize, total, hasMore: page * pageSize < total };
 }
 
 export async function getPublishedCake(slug: string): Promise<CatalogCakeDetail | null> {

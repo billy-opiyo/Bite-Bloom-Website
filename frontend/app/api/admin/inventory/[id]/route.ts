@@ -23,7 +23,7 @@ function statusFor(quantityOnHand: number, quantityReserved: number, reorderLeve
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getAdminSession();
+  const session = await getAdminSession("inventory:adjust");
   if (!session) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Inventory is not configured yet.", 503);
   const input = parseAdjustment(await request.json().catch(() => null));

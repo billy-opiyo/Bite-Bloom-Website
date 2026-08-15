@@ -13,10 +13,11 @@ The repository currently contains:
 - A responsive branded storefront with home, catalog, category, product, cart, checkout, tracking, contact, FAQ, offers, about, privacy, terms, and cookies pages.
 - Catalog data loaded from Prisma through public cake list/detail/review APIs. Active variants expose availability as `quantityOnHand - quantityReserved`.
 - Guest cart persistence through the HTTP-only `bite_bloom_cart` cookie, server-side price/customization validation, coupon application/removal, delivery scheduling, and inventory reservations.
+- Signed-in customers can save a cake from the cart for later through the server-backed wishlist.
 - Checkout for delivery or pickup, future dates within the server validation window, fixed delivery slots, M-Pesa STK Push when Daraja is configured, and cash-on-delivery confirmation through WhatsApp.
-- Auth.js credentials login, customer registration, email verification and password-reset routes, JWT sessions, protected account pages, saved addresses, customer orders, and wishlist operations.
+- Auth.js credentials login, conditional Google provider wiring, customer registration, email verification and password-reset routes, JWT sessions, protected account pages, saved addresses, customer orders, and wishlist operations.
 - Customer order tracking, payment retry for an eligible pending M-Pesa order, a server-enforced order state machine, shipment records/events, inventory adjustment, and expired-reservation release APIs.
-- Protected admin APIs for catalog, orders, order notes, shipments, inventory, customers, reviews, and date-range analytics. The admin page is protected by middleware for `admin` and `owner` roles.
+- Protected admin APIs for catalog, orders, order notes, shipments, inventory, customers, reviews, date-range analytics, contact messages, and newsletter records. The admin pages are protected by middleware for `admin` and `owner` roles, and those handlers enforce their seeded permission keys.
 - Seed data for roles, permissions, an optional owner account, three cakes with size variants and inventory, and the `SWEET10` coupon.
 - Durable Prisma models for commerce, payments, reservations, reviews, wishlist, loyalty, media, notifications, contact/newsletter records, analytics, and audit logs.
 
@@ -25,10 +26,10 @@ The repository currently contains:
 The current implementation still needs production hardening and UI integration in several areas:
 
 - `prisma/migrations/` is empty. Use `db:push` only for local development until a reviewed migration baseline is created; do not treat the current schema as deployed production state.
-- The admin page still contains prototype/sample sections for overview, orders, delivery, customers, analytics, inventory, and staff. Their protected APIs exist, but those screens are not all connected to them.
+- The admin page uses protected APIs for catalog, orders, delivery, customers, analytics, inventory, reviews, and communication; the staff section remains an explicitly unconfigured prototype pending the role-access decision.
 - Product and admin image controls currently collect/display filenames or placeholders. Cloudflare R2 upload sessions and verified media attachment are not implemented in the current route tree.
 - M-Pesa requires real Daraja credentials and a public HTTPS callback URL. Resend, WhatsApp Cloud, R2, Turnstile/WAF, monitoring, and scheduled-job hosting are not configured in this repository.
-- There are no automated unit, API, browser, backup-restore, or staging tests, and no CI or deployment configuration.
+- Focused automated tests cover rate limiting, catalog query validation, request-size policy, and promotion input validation; API/browser, backup-restore, staging, CI, and deployment verification remain outstanding.
 - Business decisions still need confirmation for delivery areas/fees, pickup rules, cancellation/refunds, notifications, retention, and the final catalog.
 
 Treat these limitations as explicit release blockers rather than simulated functionality.
@@ -118,11 +119,11 @@ Never put database, Auth.js, Daraja, or scheduler secrets in `NEXT_PUBLIC_*` var
 
 ## API surface
 
-Public routes include `/api/health`, `/api/cakes`, `/api/cakes/[slug]`, `/api/cakes/[slug]/reviews`, `/api/cart`, `/api/cart/items`, `/api/cart/coupons`, `/api/checkout`, `/api/orders/[orderNumber]`, `/api/contact`, and `/api/newsletter`.
+Public routes include `/api/health`, `/api/cakes` (validated `page`, `pageSize`, `q`, `category`, and `sort` query parameters), `/api/cakes/[slug]`, `/api/cakes/[slug]/reviews`, `/api/cart`, `/api/cart/items`, `/api/cart/coupons`, `/api/checkout`, `/api/checkout/slots`, `/api/orders/[orderNumber]`, `/api/contact`, `/api/newsletter`, and `/api/promotions`.
 
-Authenticated customer routes include `/api/account`, `/api/account/addresses`, `/api/account/orders`, `/api/account/wishlist`, and the authenticated order/payment retry paths.
+Authenticated customer routes include `/api/account`, `/api/account/addresses`, `/api/account/cart/merge`, `/api/account/orders`, `/api/account/orders/[orderNumber]`, `/api/account/orders/[orderNumber]/cancel`, `/api/account/wishlist`, and the authenticated order/payment retry paths.
 
-Admin routes include `/api/admin/cakes`, `/api/admin/orders`, `/api/admin/orders/[id]/notes`, `/api/admin/orders/[id]/shipment`, `/api/admin/shipments`, `/api/admin/inventory`, `/api/admin/customers`, `/api/admin/reviews`, and `/api/admin/analytics`.
+Admin routes include `/api/admin/cakes`, `/api/admin/orders`, `/api/admin/orders/[id]` (protected detail/status), `/api/admin/orders/[id]/notes`, `/api/admin/orders/[id]/shipment`, `/api/admin/shipments` (including validated courier assignment), `/api/admin/inventory`, `/api/admin/customers`, `/api/admin/reviews`, `/api/admin/analytics`, `/api/admin/contact-messages`, `/api/admin/newsletter`, and `/api/admin/coupons`.
 
 Auth and operational routes include `/api/auth/*`, `/api/payments/mpesa/callback`, and `/api/jobs/expire-reservations`.
 
@@ -134,11 +135,12 @@ Run these checks after source or schema changes:
 
 ```powershell
 node .\node_modules\typescript\bin\tsc --noEmit -p .\frontend\tsconfig.json
+node --import tsx --test tests/rate-limit.test.ts tests/catalog-query.test.ts tests/request-limits.test.ts tests/promotion-input.test.ts
 node .\node_modules\next\dist\bin\next lint frontend
 node .\node_modules\next\dist\bin\next build frontend
 ```
 
-Type-check and build are separate checks. Direct local binaries avoid the `&` path parsing issue on Windows in this repository. Lint currently completes with two existing React hook dependency warnings. A valid database URL may be required by build-time imports or Prisma initialization. Manual smoke testing should cover catalog loading, add-to-cart, checkout validation, account ownership, admin authorization, reservation expiry, and the configured payment callback before any release.
+Type-check and build are separate checks. Direct local binaries avoid the `&` path parsing issue on Windows in this repository. Lint currently completes without warnings. API middleware rejects declared request bodies over 1 MiB; this is only a baseline guard and does not replace distributed production throttling or WAF controls. A valid database URL may be required by build-time imports or Prisma initialization. Manual smoke testing should cover catalog loading, add-to-cart, checkout validation, account ownership, admin authorization, reservation expiry, and the configured payment callback before any release.
 
 ## Related documentation
 

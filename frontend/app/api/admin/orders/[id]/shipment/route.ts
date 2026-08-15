@@ -21,7 +21,7 @@ function parseShipment(value: unknown): { courier: string; trackingNumber?: stri
 }
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getAdminSession();
+  const session = await getAdminSession("shipment:update");
   if (!session) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Shipments are not configured yet.", 503);
   const input = parseShipment(await request.json().catch(() => null));

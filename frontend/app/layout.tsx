@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import MobileActionBar from "../components/layout/MobileActionBar";
 import SplashGate from "../components/layout/SplashGate";
+import CookieConsent from "../components/layout/CookieConsent";
+import AuthSessionProvider from "../components/auth/AuthSessionProvider";
 
 export const metadata: Metadata = {
   title: "Bite & Bloom — Cakes made for your moment",
@@ -33,7 +35,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body><SplashGate>{children}</SplashGate><MobileActionBar /></body>
+      <body><AuthSessionProvider><SplashGate>{children}</SplashGate></AuthSessionProvider><MobileActionBar /><CookieConsent /></body>
     </html>
   );
 }

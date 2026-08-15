@@ -17,7 +17,7 @@ function parseUpdate(value: unknown): ModerationStatus | null {
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getAdminSession();
+  const session = await getAdminSession("review:moderate");
   if (!session) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Reviews are not configured yet.", 503);
   const status = parseUpdate(await request.json().catch(() => null));

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  if (!(await getAdminSession())) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
+  if (!(await getAdminSession("review:moderate"))) return apiError("UNAUTHORIZED", "Review moderation permission is required.", 401);
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Reviews are not configured yet.", 503);
   const rawStatus = request.nextUrl.searchParams.get("status");
   const status = rawStatus && Object.values(ReviewStatus).includes(rawStatus as ReviewStatus) ? rawStatus as ReviewStatus : undefined;

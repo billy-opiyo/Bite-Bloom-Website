@@ -4,8 +4,19 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { compare } from "bcryptjs";
 import type { AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
 
 import { getPrismaClient } from "./prisma";
+
+async function getUserAccess(userId: string): Promise<{ roles: string[]; permissions: string[] }> {
+  const user = await getPrismaClient().user.findUnique({
+    where: { id: userId },
+    select: { roles: { select: { role: { select: { key: true, permissions: { select: { permission: { select: { key: true } } } } } } } } },
+  });
+  const roles = user?.roles.map(({ role }) => role.key) ?? [];
+  const permissions = Array.from(new Set(user?.roles.flatMap(({ role }) => role.permissions.map(({ permission }) => permission.key)) ?? []));
+  return { roles, permissions };
+}
 
 export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(getPrismaClient()),
@@ -40,18 +51,22 @@ export const authOptions: AuthOptions = {
         };
       },
     }),
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET ? [GoogleProvider({ clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET })] : []),
   ],
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.roles = user.roles;
+        const access = await getUserAccess(user.id);
+        token.roles = access.roles;
+        token.permissions = access.permissions;
       }
       return token;
     },
     async session({ session, token }) {
       session.user.id = token.id ?? "";
       session.user.roles = token.roles ?? [];
+      session.user.permissions = token.permissions ?? [];
       return session;
     },
   },

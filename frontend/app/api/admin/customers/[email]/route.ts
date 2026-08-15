@@ -18,7 +18,7 @@ function customerEmail(value: string): string | null {
 }
 
 export async function GET(_: NextRequest, { params }: { params: { email: string } }) {
-  if (!(await getAdminSession())) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
+  if (!(await getAdminSession("customer:read"))) return apiError("UNAUTHORIZED", "Customer read permission is required.", 401);
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Customers are not configured yet.", 503);
   const email = customerEmail(params.email);
   if (!email) return apiError("VALIDATION_ERROR", "Invalid customer email.", 400);

@@ -7,6 +7,8 @@ export type ApiErrorCode =
   | "DATABASE_UNAVAILABLE"
   | "FORBIDDEN"
   | "UNAUTHORIZED"
+  | "NOT_FOUND"
+  | "RATE_LIMITED"
   | "VALIDATION_ERROR"
   | "INTERNAL_ERROR";
 

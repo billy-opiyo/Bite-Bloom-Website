@@ -14,7 +14,7 @@ function positiveInteger(value: string | null, fallback: number, maximum: number
 }
 
 export async function GET(request: NextRequest) {
-  if (!(await getAdminSession())) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
+  if (!(await getAdminSession("customer:read"))) return apiError("UNAUTHORIZED", "Customer read permission is required.", 401);
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Customers are not configured yet.", 503);
   const page = positiveInteger(request.nextUrl.searchParams.get("page"), 1, 10_000);
   const pageSize = positiveInteger(request.nextUrl.searchParams.get("pageSize"), 25, 100);

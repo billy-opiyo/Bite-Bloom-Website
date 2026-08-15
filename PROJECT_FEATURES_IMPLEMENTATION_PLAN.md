@@ -29,9 +29,9 @@ This plan reflects the current source tree. A feature is not considered complete
 ### Partial
 
 - Storefront pages use live APIs for the main catalog/cart/checkout path, but product media is still placeholder-driven and the home page contains presentation content that needs final business configuration.
-- The admin page is protected and partially API-connected, but overview, orders, delivery, customers, analytics, inventory, and staff sections still contain sample values or prototype actions.
+- The admin page is protected and API-connected for catalog, orders, delivery, customers, analytics, inventory, reviews, and communication; the staff section remains an explicitly unconfigured prototype pending the approved role-access policy.
 - Database role/permission records are seeded, but handlers primarily use coarse admin/owner checks rather than a complete granular permission matrix.
-- Contact/newsletter records and verification/reset tokens are persisted, but email/WhatsApp delivery, rate limiting, consent history, retries, and admin visibility are incomplete.
+- Contact/newsletter records and verification/reset tokens are persisted. Basic in-process rate limiting, local consent capture, and protected admin communication visibility are implemented; email/WhatsApp delivery, consent history, distributed limits, and retries remain incomplete.
 - Prisma models exist for R2 media, notifications, loyalty, analytics events/daily metrics, refunds, and audit coverage, but the full provider/workflow surface is not connected.
 
 ### Blocked or not started
@@ -61,7 +61,7 @@ This plan reflects the current source tree. A feature is not considered complete
 - [x] Reusable cake, cart, checkout, homepage, layout, tracking, legal, and shared state components exist.
 - [x] Responsive theme, navigation, splash/loading, floating public actions, and dynamic footer behavior exist.
 - [ ] Remove remaining page-local sample data and connect every visible metric/action to a source of truth.
-- [ ] Complete accessibility review, reduced-motion review, mobile breakpoints, focus management, and image alt/fallback review.
+- [x] Add global reduced-motion handling and visible keyboard focus rings; [ ] complete accessibility review, mobile breakpoints, focus management, and image alt/fallback review.
 - [ ] Replace placeholder business copy/contact/social/map values with approved configuration.
 
 ### Phase 2 — Catalog and product experience
@@ -71,8 +71,10 @@ This plan reflects the current source tree. A feature is not considered complete
 - [x] Public cake list/detail routes and APIs exist.
 - [x] Variant size, price, ingredient/allergen fields, preparation time, availability, and customization validation foundations exist.
 - [x] Product cards link to real product routes and can add a server-validated variant to cart.
+- [x] Product cards expose a configured WhatsApp order action with the cake name and slug in the prefilled message.
 - [ ] Seed the approved full catalog and category set.
-- [ ] Add validated query filtering, bounded pagination, complete product SEO/structured data, and approved media.
+- [x] Add validated catalogue query filtering, bounded pagination, and a shop-page load-more path; [ ] add approved media records/configuration.
+- [x] Add product JSON-LD plus server-side cake metadata, canonical URLs, and approved Open Graph image references.
 - [ ] Implement R2 upload/verification and replace filename-only image controls.
 
 ### Phase 3 — Cart, checkout, and payments
@@ -81,7 +83,11 @@ This plan reflects the current source tree. A feature is not considered complete
 
 - [x] Guest cart, item changes, coupons, server totals, delivery/pickup, scheduled date/slot, reservations, snapshots, M-Pesa STK foundation, COD, callback, and retry routes exist.
 - [x] Inventory availability and reservation release/consumption are server-controlled.
-- [ ] Add guest-to-account cart merge, checkout idempotency, slot capacity, configured delivery pricing/areas, payment query/reconciliation, refunds, and provider failure states.
+- [x] Add guest-to-account cart merge and live slot availability/validation.
+- [x] Add checkout idempotency, live slot availability, and server slot-capacity validation.
+- [x] Add safe customer cancellation boundaries for unpaid cancellable orders.
+- [x] Add an authenticated cart “save for later” action that moves the cake into the server-backed wishlist.
+- [ ] Add configured delivery pricing/areas, payment query/reconciliation, refunds, and paid-order provider failure states.
 - [ ] Run staging scenarios for price tampering, invalid variants, coupon limits, duplicate checkout/callbacks, expired reservations, M-Pesa success/failure, COD, and unauthorized order access.
 
 ### Phase 4 — Authentication, account, and communication
@@ -90,16 +96,21 @@ This plan reflects the current source tree. A feature is not considered complete
 
 - [x] Credentials login, registration, JWT session, verification/reset route foundations, account profile, addresses, orders, and wishlist exist.
 - [x] Customer ownership is checked in account/order resources.
-- [ ] Configure secure email delivery and complete single-use token delivery/failure handling.
-- [ ] Add granular RBAC, staff invitations, Google OAuth only if approved, account deletion/retention, loyalty UI, reorder/receipt flows, and communication preferences.
-- [ ] Add rate limits, consent capture, notification records/retries, and admin visibility for contact/newsletter messages.
+- [x] Require the single-use verification token before password-account activation; [ ] configure secure email delivery and complete delivery/failure handling.
+- [x] Add conditional Google OAuth provider/button wiring; [ ] configure approved credentials and verify the live callback.
+- [ ] Add granular RBAC, staff invitations, account deletion/retention, loyalty UI, and communication preferences.
+- [x] Add authenticated order detail, status history, safe cancellation, print-ready receipt view, and server-validated reorder using stored variant IDs.
+- [x] Add basic in-process rate limits to contact, newsletter, registration, and password-reset requests.
+- [x] Add local necessary/optional consent capture and protected admin visibility/status updates for contact/newsletter records; [ ] add distributed limits, notification delivery records/retries, and provider delivery.
 
 ### Phase 5 — Order operations and delivery
 
 **Status: Partial**
 
 - [x] Server order state machine, status history, customer tracking, admin order updates/notes, shipment records/events, and inventory consumption/release foundations exist.
-- [ ] Connect admin order/delivery screens to APIs and add staff assignment, proof of delivery, courier/ETA integration, pickup readiness, cancellation, invoices/receipts, exports, and refunds.
+- [ ] Connect admin order/delivery screens to APIs and add proof of delivery, courier/ETA integration, pickup readiness, cancellation, exports, and refunds.
+- [x] Connect the admin driver selector to validated shipment courier assignment; [ ] add driver identity management and richer dispatch workflows.
+- [x] Add protected admin order detail retrieval and a print-ready receipt route for the existing order action.
 - [ ] Configure and schedule reservation expiry; add status notifications with retry/deduplication.
 
 ### Phase 6 — Admin, RBAC, inventory, and analytics
@@ -108,16 +119,19 @@ This plan reflects the current source tree. A feature is not considered complete
 
 - [x] Protected admin route, catalog CRUD foundation, inventory list/adjustment, customer list/detail, review moderation, shipment, order, and analytics APIs exist.
 - [x] Seeded roles and permissions cover the initial operating roles.
-- [ ] Replace sample admin metrics, charts, directory, order lists, delivery views, inventory actions, and staff UI with API-backed screens.
-- [ ] Enforce granular permission keys at each handler, implement staff/role management, add audit coverage, event collection, daily aggregation, exports, and privacy-scoped customer operations.
+- [x] Replace overview, delivery, customer directory, and analytics sample metrics with API-backed, empty-safe screens; cake availability toggles, inventory restock, order status, and review moderation now persist through protected APIs.
+- [x] Remove fabricated fallback records from catalog/order/inventory/review views when protected APIs are unavailable; [ ] connect staff/login-audit/export workflows and replace remaining prototype staff actions.
+- [x] Enforce seeded permission keys across existing admin/owner handlers; [ ] decide whether non-admin staff roles may enter the admin surface, then implement staff/role management, audit coverage, event collection, daily aggregation, exports, and privacy-scoped customer operations.
 
 ### Phase 7 — Trust, retention, and advanced selling
 
-**Status: Partial for reviews; otherwise not started**
+**Status: Partial; review, wishlist, and basic coupon promotions are implemented**
 
 - [x] Delivered-order review submission and protected moderation exist.
 - [x] Authenticated wishlist operations exist.
-- [ ] Complete review UX, loyalty ledger/rewards, referrals, abandoned-cart recovery, promotions, reminders, and wishlist availability synchronization.
+- [x] Add customer review submission UX with delivered-order validation, moderation messaging, and abuse throttling.
+- [x] Add protected coupon promotion CRUD at `/admin/promotions`, a validated promotion parser, and a public live-offers endpoint/page backed by the existing server-side cart coupon engine.
+- [ ] Add review-photo attachments, loyalty ledger/rewards, referrals, abandoned-cart recovery, reminders, and wishlist availability synchronization; extend promotions to flash sales, cake/category targeting, and campaign scheduling as business rules are approved.
 
 ### Phase 8 — Media, custom requests, AI, subscriptions, and branches
 
@@ -128,28 +142,30 @@ This plan reflects the current source tree. A feature is not considered complete
 
 ### Phase 9 — Security, performance, SEO, accessibility, marketing, and legal
 
-**Status: Not started**
+**Status: Partial**
 
-- [ ] Add rate limiting, CSRF review, security headers/CSP, Turnstile/WAF, secret management, structured logs, monitoring, and error reporting.
-- [ ] Complete metadata/structured data, image optimization, performance review, keyboard/contrast/screen-reader review, consent/cookie behavior, and legal approval.
+- [x] Add baseline security response headers/CSP (with development-only `unsafe-eval`), basic in-process rate limiting, and a 1 MiB declared API body-size guard.
+- [ ] Complete CSRF review, distributed rate limits, Turnstile/WAF, secret management, structured logs, monitoring, and error reporting.
+- [x] Add baseline product metadata and structured data plus a persistent necessary/optional cookie-consent control; [ ] complete image optimization, performance review, keyboard/contrast/screen-reader review, consent copy/legal approval.
 - [ ] Validate all public and admin forms against direct API misuse and oversized/untrusted input.
 
 ### Phase 10 — QA, launch, and operations
 
-**Status: Not started**
+**Status: Partial**
 
 - [ ] Create migration, staging, CI, deployment, backup, restore, rollback, and incident runbooks.
-- [ ] Add unit, API, integration, and browser coverage proportional to payment, inventory, auth, and admin risk.
+- [x] Add focused automated tests for the rate-limit core, catalog query validation, request-size policy, and promotion input validation.
+- [ ] Expand unit, API, integration, and browser coverage proportional to payment, inventory, auth, and admin risk.
 - [ ] Verify a disposable database restore and a complete staging order from checkout through completion.
 - [ ] Perform mobile/browser smoke tests and record release evidence before production.
 
 ## Recommended next five implementation slices
 
 1. Confirm business configuration and create the reviewed Prisma migration baseline.
-2. Connect the admin orders, delivery, customers, analytics, and inventory tabs to their existing protected APIs.
-3. Implement R2 upload/verification and attach real approved catalog/product media.
-4. Add payment reconciliation/refund boundaries, notification providers, and scheduled reservation expiry.
-5. Add focused automated tests and a staging smoke-test checklist for the server-authoritative commerce paths.
+2. Implement R2 upload/verification and attach real approved catalog/product media.
+3. Add payment reconciliation/refund boundaries, notification providers, and scheduled reservation expiry.
+4. Complete staff/audit/export workflows after the role-access policy is approved.
+5. Expand focused automated tests and add a staging smoke-test checklist for the server-authoritative commerce paths.
 
 ## Definition of done
 

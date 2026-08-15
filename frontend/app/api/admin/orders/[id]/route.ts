@@ -10,6 +10,25 @@ import { getPrismaClient } from "../../../../../lib/server/prisma";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+  if (!(await getAdminSession("order:read"))) return apiError("UNAUTHORIZED", "Order read permission is required.", 401);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Orders are not configured yet.", 503);
+  try {
+    const order = await getPrismaClient().order.findFirst({
+      where: { OR: [{ id: params.id }, { orderNumber: params.id }] },
+      include: {
+        items: true,
+        addresses: true,
+        payments: { orderBy: { createdAt: "desc" }, take: 3, select: { provider: true, status: true, amount: true, paidAt: true, providerReference: true } },
+      },
+    });
+    if (!order) return apiError("NOT_FOUND", "Order not found.", 404);
+    return apiSuccess({ id: order.id, orderNumber: order.orderNumber, email: order.email, phone: order.phone, status: order.status, paymentStatus: order.paymentStatus, fulfillmentType: order.fulfillmentType, currency: order.currency, subtotal: Number(order.subtotal), discountTotal: Number(order.discountTotal), deliveryFee: Number(order.deliveryFee), taxTotal: Number(order.taxTotal), total: Number(order.total), notes: order.notes, scheduledFor: order.scheduledFor, deliverySlot: order.deliverySlot, placedAt: order.placedAt, items: order.items.map((item) => ({ cakeName: item.cakeName, variantName: item.variantName, sku: item.sku, quantity: item.quantity, unitPrice: Number(item.unitPrice), lineTotal: Number(item.lineTotal), customizations: item.customizations })), addresses: order.addresses, payments: order.payments.map((payment) => ({ provider: payment.provider, status: payment.status, amount: Number(payment.amount), paidAt: payment.paidAt, providerReference: payment.providerReference })) });
+  } catch {
+    return apiError("DATABASE_UNAVAILABLE", "Order details are temporarily unavailable.", 503);
+  }
+}
+
 function parseUpdate(value: unknown): { status: OrderStatus; reason?: string } | null {
   if (!value || typeof value !== "object") return null;
   const input = value as Record<string, unknown>;
@@ -19,7 +38,7 @@ function parseUpdate(value: unknown): { status: OrderStatus; reason?: string } |
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getAdminSession();
+  const session = await getAdminSession("order:update");
   if (!session) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Orders are not configured yet.", 503);
   const input = parseUpdate(await request.json().catch(() => null));
