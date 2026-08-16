@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import { type NextRequest } from "next/server";
 import { apiError, apiSuccess } from "../../../../../lib/server/api-response";
+import { parseAuthEmail } from "../../../../../lib/server/auth-input";
 import { hasDatabaseConfiguration } from "../../../../../lib/server/env";
 import { getPrismaClient } from "../../../../../lib/server/prisma";
 import { enforceRateLimit } from "../../../../../lib/server/rate-limit";
@@ -10,9 +11,9 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   const limited = enforceRateLimit(request, "password-reset", 5, 15 * 60 * 1000);
   if (limited) return limited;
+  const email = parseAuthEmail(((await request.json().catch(() => null) as { email?: unknown } | null)?.email));
+  if (!email) return apiError("VALIDATION_ERROR", "Enter a valid email address.", 400);
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Password reset is not configured yet.", 503);
-  const email = ((await request.json().catch(() => null) as { email?: unknown } | null)?.email as string | undefined)?.trim().toLowerCase();
-  if (!email || !/^\S+@\S+\.\S+$/.test(email)) return apiError("VALIDATION_ERROR", "Enter a valid email address.", 400);
   try {
     const prisma = getPrismaClient();
     const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });

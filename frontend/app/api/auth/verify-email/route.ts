@@ -1,14 +1,18 @@
 import { type NextRequest } from "next/server";
 import { apiError, apiSuccess } from "../../../../lib/server/api-response";
+import { parseVerificationToken } from "../../../../lib/server/auth-input";
 import { hasDatabaseConfiguration } from "../../../../lib/server/env";
 import { getPrismaClient } from "../../../../lib/server/prisma";
+import { enforceRateLimit } from "../../../../lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  const limited = enforceRateLimit(request, "verify-email", 5, 15 * 60 * 1000);
+  if (limited) return limited;
+  const token = parseVerificationToken((await request.json().catch(() => null) as { token?: unknown } | null)?.token);
+  if (!token) return apiError("VALIDATION_ERROR", "A valid verification token is required.", 400);
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Email verification is not configured yet.", 503);
-  const token = (await request.json().catch(() => null) as { token?: unknown } | null)?.token;
-  if (typeof token !== "string" || token.length < 32) return apiError("VALIDATION_ERROR", "A valid verification token is required.", 400);
   try {
     const prisma = getPrismaClient();
     const record = await prisma.verificationToken.findUnique({ where: { token } });

@@ -31,7 +31,7 @@ The current implementation still needs production hardening and UI integration i
 - The admin page uses protected APIs for catalog, orders, delivery, customers, analytics, inventory, reviews, and communication; the staff section remains an explicitly unconfigured prototype pending the role-access decision.
 - Product and admin image surfaces use placeholders and explicitly identify media uploads as unavailable; no filename-only upload is presented as saved. Cloudflare R2 upload sessions and verified media attachment are not implemented in the current route tree.
 - M-Pesa requires real Daraja credentials and a public HTTPS callback URL. Resend, WhatsApp Cloud, R2, Turnstile/WAF, monitoring, and scheduled-job hosting are not configured in this repository.
-- Focused automated tests cover rate limiting, catalog query validation, request-size/content-type/origin policy, promotion input, public custom-request source validation, account-address validation, and notification recipient redaction; API/browser, backup-restore, staging, CI, and deployment verification remain outstanding.
+- Focused automated tests cover rate limiting, authentication input parsing, catalog query validation, request-size/content-type/origin policy, promotion input, public custom-request source validation, account-address validation, and notification recipient redaction; API/browser, backup-restore, staging, CI, and deployment verification remain outstanding.
 - Business decisions still need confirmation for delivery areas/fees, pickup rules, cancellation/refunds, notifications, retention, and the final catalog.
 
 Treat these limitations as explicit release blockers rather than simulated functionality.
@@ -137,12 +137,12 @@ Run these checks after source or schema changes:
 
 ```powershell
 node .\node_modules\typescript\bin\tsc --noEmit -p .\frontend\tsconfig.json
-node --import tsx --test tests/rate-limit.test.ts tests/catalog-query.test.ts tests/request-limits.test.ts tests/promotion-input.test.ts tests/public-forms.test.ts tests/address.test.ts tests/notification-privacy.test.ts
+npm test
 node .\node_modules\next\dist\bin\next lint frontend
 node .\node_modules\next\dist\bin\next build frontend
 ```
 
-Type-check and build are separate checks. Direct local binaries avoid the `&` path parsing issue on Windows in this repository. Lint currently completes without warnings. API middleware rejects declared request bodies over 1 MiB and mismatched browser mutation origins; these are baseline guards and do not replace distributed production throttling, CSRF defense-in-depth, or WAF controls. A valid database URL may be required by build-time imports or Prisma initialization. Manual smoke testing should cover catalog loading, add-to-cart, checkout validation, account ownership, admin authorization, reservation expiry, and the configured payment callback before any release.
+Type-check and build are separate checks. Direct local binaries avoid the `&` path parsing issue on Windows in this repository. Lint currently completes without warnings. The Next.js Webpack build worker is disabled in `next.config.js` because the Windows build otherwise stalled after generating output; with that setting and process-only local placeholders, `next build frontend` completed successfully with exit code 0 in the latest verification. API middleware rejects declared request bodies over 1 MiB and mismatched browser mutation origins; these are baseline guards and do not replace distributed production throttling, CSRF defense-in-depth, or WAF controls. A valid database URL may be required by build-time imports or Prisma initialization. Manual smoke testing should still cover catalog loading, add-to-cart, checkout validation, account ownership, admin authorization, reservation expiry, and the configured payment callback before any release.
 
 ## Related documentation
 

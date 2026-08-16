@@ -35,6 +35,8 @@ type IconName =
 
 type Cake = {
   id: number;
+  serverId?: string;
+  slug?: string;
   name: string;
   category: string;
   tag: string;
@@ -48,6 +50,7 @@ type Cake = {
   allergens: string;
   flavors: string[];
   shapes: string[];
+  variantPrices?: Record<string, number>;
 };
 
 type CartItem = {
@@ -81,10 +84,17 @@ type OrderDetails = {
 
 type CatalogueResponseCake = {
   id: string;
+  slug: string;
   name: string;
+  description: string | null;
+  ingredients: string | null;
+  allergens: string | null;
   price: number;
-  categories: Array<{ name: string }>;
-  variants: Array<{ id: string; name: string }>;
+  isFeatured: boolean;
+  categories: Array<{ name: string; slug: string }>;
+  images: Array<{ url: string | null; altText: string | null }>;
+  variants: Array<{ id: string; name: string; price: number; isAvailable: boolean }>;
+  customizations: Array<{ key: string; label: string; type: string; isRequired: boolean; priceDelta: number; values: Array<{ label: string; value: string; priceDelta: number }> }>;
 };
 
 type StoredCartItem = { id: string; quantity: number; variantId: string; variantName: string; cakeName: string; customizations: unknown };
@@ -365,12 +375,40 @@ function formatPrice(amount: number) {
 }
 
 function getCustomizedPrice(cake: Cake, size: string, toppings: string[], withCandles: boolean, withCard: boolean) {
+  const normalizedSize = size.replace(/\s/g, "").toLowerCase();
+  const serverVariantPrice = cake.variantPrices && Object.entries(cake.variantPrices).find(([name]) => name.replace(/\s/g, "").toLowerCase() === normalizedSize)?.[1];
+  const basePrice = serverVariantPrice ?? cake.price * (size === "0.5 kg" ? 0.65 : size === "2 kg" ? 1.8 : 1);
   return Math.round(
-    cake.price * (size === "0.5 kg" ? 0.65 : size === "2 kg" ? 1.8 : 1) +
+    basePrice +
       (withCandles ? 250 : 0) +
       (withCard ? 350 : 0) +
       toppings.length * 180,
   );
+}
+
+function mapServerCake(cake: CatalogueResponseCake, fallback: Cake | undefined, index: number): Cake {
+  const optionValues = (key: string, fallbackValues: string[]) => cake.customizations?.find((item) => item.key.toLowerCase() === key)?.values.map((value) => value.label) ?? fallback?.[key === "flavor" ? "flavors" : "shapes"] ?? fallbackValues;
+  const images = cake.images.map((image) => image.url).filter((url): url is string => Boolean(url));
+  const primaryImage = images[0] ?? fallback?.image ?? "/images/Bite%26Bloom%20icon.png";
+  return {
+    id: fallback?.id ?? index + 1,
+    serverId: cake.id,
+    slug: cake.slug,
+    name: cake.name,
+    category: cake.categories[0]?.name ?? fallback?.category ?? "Cake",
+    tag: cake.isFeatured ? "Featured" : fallback?.tag ?? "Freshly baked",
+    price: cake.price,
+    rating: fallback?.rating ?? 0,
+    reviews: fallback?.reviews ?? 0,
+    image: primaryImage,
+    images: images.length ? images : fallback?.images?.length ? fallback.images : [primaryImage],
+    description: cake.description ?? fallback?.description ?? "Made fresh for your celebration.",
+    ingredients: cake.ingredients ?? fallback?.ingredients ?? "Ask our team for ingredients.",
+    allergens: cake.allergens ?? fallback?.allergens ?? "Please contact us about allergens.",
+    flavors: optionValues("flavor", fallback?.flavors ?? ["Vanilla"]),
+    shapes: optionValues("shape", fallback?.shapes ?? ["Round"]),
+    variantPrices: Object.fromEntries(cake.variants.map((variant) => [variant.name, variant.price])),
+  };
 }
 
 export default function HomePage() {
@@ -418,6 +456,7 @@ export default function HomePage() {
   const signedIn = authStatus === "authenticated";
   const cartCount = cartItems.reduce((count, item) => count + item.quantity, 0);
   const orderNumber = order?.number;
+  const activeDialog = selectedCake ? "product" : checkoutOpen ? "checkout" : accountOpen ? "account" : cartOpen ? "cart" : null;
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("bite-bloom-theme");
@@ -466,7 +505,8 @@ export default function HomePage() {
         if (!isMounted || !payload.data?.items) return;
         setAppliedCoupon(payload.data.coupons?.[0] ?? null);
         setCartItems(payload.data.items.flatMap((item) => {
-          const cake = cakes.find((candidate) => candidate.name === item.cakeName);
+          const fallbackCake = cakes.find((candidate) => candidate.name === item.cakeName);
+          const cake = fallbackCake ?? (catalogueCakes[item.cakeName] ? mapServerCake(catalogueCakes[item.cakeName], undefined, cakes.length + 1) : undefined);
           if (!cake) return [];
           const options = item.customizations && typeof item.customizations === "object" ? item.customizations as Record<string, unknown> : {};
           return [{ id: item.id, cake, quantity: item.quantity, size: item.variantName, flavor: typeof options.flavor === "string" ? options.flavor : cake.flavors[0], shape: typeof options.shape === "string" ? options.shape : cake.shapes[0], theme: typeof options.theme === "string" ? options.theme : "Whipped cream", message: typeof options.message === "string" ? options.message : "", toppings: Array.isArray(options.toppings) ? options.toppings.filter((topping): topping is string => typeof topping === "string") : [], withCandles: options.withCandles === true, withCard: options.withCard === true }];
@@ -477,7 +517,7 @@ export default function HomePage() {
     }
     void restoreCart();
     return () => { isMounted = false; };
-  }, []);
+  }, [catalogueCakes]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = darkMode ? "dark" : "light";
@@ -492,15 +532,56 @@ export default function HomePage() {
   }, [selectedCake, cartOpen, checkoutOpen, accountOpen]);
 
   useEffect(() => {
+    if (!activeDialog) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = document.querySelector<HTMLElement>("[role=\"dialog\"][aria-modal=\"true\"]");
+    const frame = window.requestAnimationFrame(() => {
+      const firstFocusable = dialog?.querySelector<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex=\"-1\"])");
+      firstFocusable?.focus({ preventScroll: true });
+    });
+    function handleDialogKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (activeDialog === "product") setSelectedCake(null);
+        else if (activeDialog === "checkout") setCheckoutOpen(false);
+        else if (activeDialog === "account") setAccountOpen(false);
+        else if (activeDialog === "cart") setCartOpen(false);
+        return;
+      }
+      if (event.key !== "Tab" || !dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex=\"-1\"])")).filter((element) => !element.hasAttribute("aria-hidden"));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", handleDialogKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", handleDialogKeyDown);
+      previousFocus?.focus({ preventScroll: true });
+    };
+  }, [activeDialog]);
+
+  useEffect(() => {
     const controller = new AbortController();
 
     async function loadCatalogue() {
       try {
         const response = await fetch("/api/cakes", { signal: controller.signal });
         if (!response.ok) return;
-        const payload = await response.json() as { data?: CatalogueResponseCake[] };
-        if (!payload.data) return;
-        setCatalogueCakes(Object.fromEntries(payload.data.map((cake) => [cake.name, cake])));
+        const payload = await response.json() as { data?: { items?: CatalogueResponseCake[] } };
+        const items = payload.data?.items ?? [];
+        setCatalogueCakes(Object.fromEntries(items.map((cake) => [cake.name, cake])));
       } catch {
         // The static visual catalogue remains available while the API is offline.
       }
@@ -519,8 +600,8 @@ export default function HomePage() {
         if (!response.ok) return;
         const payload = await response.json() as { data?: StoredWishlistItem[] };
         if (!payload.data) return;
-        setLikedCakes(payload.data.flatMap((item) => {
-          const cake = cakes.find((candidate) => candidate.name === item.cake.name);
+        setLikedCakes(payload.data.flatMap((item, index) => {
+          const cake = cakes.find((candidate) => candidate.name === item.cake.name) ?? (catalogueCakes[item.cake.name] ? mapServerCake(catalogueCakes[item.cake.name], undefined, index) : undefined);
           return cake ? [cake.id] : [];
         }));
       } catch {
@@ -531,12 +612,11 @@ export default function HomePage() {
     return () => controller.abort();
   }, [catalogueCakes]);
 
-  const displayedCakes = useMemo(() => cakes.map((cake) => {
-    const serverCake = catalogueCakes[cake.name];
-    return serverCake
-      ? { ...cake, price: serverCake.price, category: serverCake.categories[0]?.name ?? cake.category }
-      : cake;
-  }), [catalogueCakes]);
+  const displayedCakes = useMemo(() => {
+    const serverCakes = Object.values(catalogueCakes);
+    if (!serverCakes.length) return cakes;
+    return serverCakes.map((serverCake, index) => mapServerCake(serverCake, cakes.find((cake) => cake.name === serverCake.name), index));
+  }, [catalogueCakes]);
 
   const filteredCakes = useMemo(() => {
     const query = search.trim().toLowerCase();

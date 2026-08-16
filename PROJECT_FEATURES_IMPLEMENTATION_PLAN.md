@@ -60,7 +60,9 @@ This plan reflects the current source tree. A feature is not considered complete
 
 - [x] Reusable cake, cart, checkout, homepage, layout, tracking, legal, and shared state components exist.
 - [x] Responsive theme, navigation, splash/loading, floating public actions, and dynamic footer behavior exist.
+- [x] Add homepage dialog focus management: initial focus, Tab containment, Escape close, and focus restoration for cart, checkout, account, and product overlays.
 - [ ] Remove remaining page-local sample data and connect every visible metric/action to a source of truth; the homepage tracking preview control has been replaced with server-refreshed status and a real tracking route.
+- [x] Make homepage catalog hydration consume the paginated `/api/cakes` envelope, active customization definitions, live images/metadata, and server variant prices; the static visual fallback remains only for unconfigured/offline preview mode.
 - [x] Add global reduced-motion handling and visible keyboard focus rings; [ ] complete accessibility review, mobile breakpoints, focus management, and image alt/fallback review.
 - [ ] Replace placeholder business copy/contact/social/map values with approved configuration.
 
@@ -101,7 +103,8 @@ This plan reflects the current source tree. A feature is not considered complete
 - [ ] Add granular RBAC, staff invitations, account deletion/retention, and communication preferences.
 - [x] Add protected read-only loyalty balance/history API and account navigation; [ ] approve and implement points earning, redemption, and expiry rules.
 - [x] Add authenticated order detail, status history, safe cancellation, print-ready receipt view, and server-validated reorder using stored variant IDs.
-- [x] Add basic in-process rate limits to contact, newsletter, registration, and password-reset requests.
+- [x] Add basic in-process rate limits to contact, newsletter, registration, password-reset, review, order-tracking, and payment-retry requests.
+- [x] Centralize authentication email/token/password parsing, validate reset/verification bodies before database configuration access, and rate-limit verification and password-reset confirmation attempts.
 - [x] Add local necessary/optional consent capture, a public newsletter unsubscribe page/API, protected admin visibility/status updates for contact/newsletter records, and privacy-scoped notification delivery metadata; [ ] add distributed limits, notification retries, and provider delivery.
 
 ### Phase 5 — Order operations and delivery
@@ -151,7 +154,7 @@ This plan reflects the current source tree. A feature is not considered complete
 
 - [x] Add baseline security response headers/CSP (with development-only `unsafe-eval`), basic in-process rate limiting, a same-origin guard for browser mutations, a 1 MiB declared API body-size guard, and middleware JSON content-type validation for non-Auth API mutations.
 - [ ] Complete CSRF review, distributed rate limits, Turnstile/WAF, secret management, structured logs, monitoring, and error reporting.
-- [x] Add baseline product metadata and structured data plus a persistent necessary/optional cookie-consent control; [ ] complete image optimization, performance review, keyboard/contrast/screen-reader review, consent copy/legal approval.
+- [x] Add route-level catalog/information metadata, baseline product metadata and structured data plus a persistent necessary/optional cookie-consent control; [ ] complete image optimization, performance review, keyboard/contrast/screen-reader review, consent copy/legal approval.
 - [ ] Validate all public and admin forms against direct API misuse and oversized/untrusted input.
 
 ### Phase 10 — QA, launch, and operations
@@ -160,6 +163,7 @@ This plan reflects the current source tree. A feature is not considered complete
 
 - [ ] Create migration, staging, CI, deployment, backup, restore, rollback, and incident runbooks.
 - [x] Add focused automated tests for the rate-limit core, catalog query validation, request-size/origin policy, promotion input, public custom-request source validation, account-address validation, and notification recipient redaction.
+- [x] Verify a clean `next build frontend` with process-only local placeholders; disable the Windows Webpack build worker in `next.config.js` to avoid the prior post-generation stall.
 - [ ] Expand unit, API, integration, and browser coverage proportional to payment, inventory, auth, and admin risk.
 - [ ] Verify a disposable database restore and a complete staging order from checkout through completion using `docs/STAGING_SMOKE_TEST_CHECKLIST.md`.
 - [ ] Perform mobile/browser smoke tests and record release evidence before production.

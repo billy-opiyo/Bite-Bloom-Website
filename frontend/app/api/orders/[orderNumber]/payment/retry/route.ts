@@ -6,6 +6,7 @@ import { apiError, apiSuccess } from "../../../../../../lib/server/api-response"
 import { hasDatabaseConfiguration } from "../../../../../../lib/server/env";
 import { hasMpesaConfiguration, initiateStkPush } from "../../../../../../lib/server/mpesa";
 import { getPrismaClient } from "../../../../../../lib/server/prisma";
+import { enforceRateLimit } from "../../../../../../lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -21,6 +22,8 @@ function emailFrom(value: unknown): string | null {
 }
 
 export async function POST(request: NextRequest, { params }: { params: { orderNumber: string } }) {
+  const rateLimitResponse = enforceRateLimit(request, "payment-retry", 3, 15 * 60 * 1000);
+  if (rateLimitResponse) return rateLimitResponse;
   if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Payments are not configured yet.", 503);
   if (!hasMpesaConfiguration()) return apiError("CONFIGURATION_ERROR", "M-Pesa payments are not configured yet.", 503);
   const email = emailFrom(await request.json().catch(() => null));

@@ -23,14 +23,14 @@ The App Router contains real pages for:
 
 `/`, `/about`, `/cakes`, `/cakes/[slug]`, `/cakes/[slug]/reviews`, `/categories/[slug]`, `/cart`, `/checkout`, `/contact`, `/faq`, `/offers`, `/tracking`, `/privacy`, `/terms`, and `/cookies`.
 
-The public layout includes the branded navigation/footer, responsive actions, theme support, loading/not-found states, sitemap, robots metadata, and manifest support.
+The public layout includes the branded navigation/footer, responsive actions, theme support, loading/not-found states, sitemap, route-level public metadata/canonicals, robots metadata, and manifest support.
 
 ### Authentication and account
 
 - Auth.js credentials login uses Prisma and bcrypt with JWT sessions.
 - Registration creates a customer account and can associate eligible prior guest orders by email.
 - New password accounts remain `PENDING` until the single-use verification token is consumed; registration no longer auto-signs the user in.
-- Forgot-password, reset-password, email-verification, and rate-limited verification-resend pages/routes use database verification tokens with expiry; password-reset token cleanup now targets its namespaced identifier correctly, and each token endpoint rejects tokens belonging to the other flow before touching user records.
+- Forgot-password, reset-password, email-verification, and rate-limited verification-resend pages/routes use database verification tokens with expiry; password-reset token cleanup now targets its namespaced identifier correctly, each token endpoint rejects tokens belonging to the other flow before touching user records, and shared auth input parsers validate email/token/password shapes before configuration access. Verification and password-reset confirmation attempts are rate-limited.
 - Middleware protects `/admin/:path*` for sessions carrying the `admin` or `owner` role.
 - Account routes cover profile updates, address create/edit/delete/default management, order history/detail, and wishlist operations; wishlist cards expose server-derived availability and guest save actions return to sign-in; the account page now exposes those address controls through the protected endpoints.
 - Address deletion preserves the default-address invariant by promoting the most recently updated remaining address inside the same transaction.
@@ -136,7 +136,16 @@ Baseline security headers/CSP (with development-only `unsafe-eval`), a database-
 
 ## Validation notes
 
-The documentation describes source-level implementation found in the repository on 16 August 2026. The direct TypeScript check, focused rate-limit/catalog-query/request-size/origin/promotion/public-form/address/notification-privacy tests (19 passing), Prisma generate/validate checks, lint, and diff check pass. Local preview smoke checks returned 200 for `/`, `/cart`, `/offers`, `/custom-cake`, `/unsubscribe`, `/account/loyalty`, `/cakes`, `/faq`, and `/privacy`; protected admin/account APIs redirect or return 401 without a session, and database-dependent public APIs return explicit 503 configuration states without `DATABASE_URL`. Mutating API requests with a mismatched browser `Origin` are rejected with 403, while server callbacks without an Origin header remain allowed. Admin operational views no longer fabricate records when their protected APIs are unavailable. A full `next build frontend` attempt with process-only local placeholders timed out after 180 seconds after webpack cache snapshot warnings; it is not represented as a successful production build. `npm install` reported eight audit findings; no automatic audit fix was applied because it may introduce breaking dependency changes. Basic in-process rate limits now protect public contact/newsletter, registration/password-reset, and review submission requests; these limits are not a substitute for distributed production throttling. Cookie consent is implemented locally, but final consent copy/legal approval and any optional provider integration remain pending. A live database, Daraja callback, email delivery, external media upload, and production deployment were not verified by this handoff. Run the checks in [README.md](README.md#verification) after configuring a safe development database and unique local `NEXTAUTH_SECRET`.
+The default test script runs with one worker on Windows because parallel test workers intermittently produced `spawn EPERM`; the 21 assertions pass sequentially.
+
+The homepage cart, checkout, account, and product overlays now move focus into the active dialog, contain Tab navigation, close on Escape, and restore focus to the triggering control. Broader mobile, screen-reader, image fallback, and browser/device review remains outstanding.
+
+Homepage catalog hydration now consumes `/api/cakes` as a paginated `{ items, ... }` response, maps active customization definitions and approved media URLs when available, uses live variant prices for estimates, and restores server-only cakes in cart/wishlist state. The legacy visual cake records remain an explicit offline/unconfigured preview fallback until the approved catalog and media records are seeded.
+
+A clean production build initially stalled after generating output on Windows. `next.config.js` now disables the Webpack build worker for this environment; the latest bounded `next build frontend` retry completed with exit code 0 in about 174 seconds using process-only local placeholders. The generated output was also served by a temporary `next start` smoke server for `/` and `/cakes`, each returning HTTP 200, with no preview listener left running.
+
+The source-level TypeScript check, focused rate-limit/catalog-query/request-size/origin/promotion/public-form/address/notification-privacy/auth-input tests (21 passing), Prisma generate/validate checks, lint, production build, preview smoke checks, and diff check pass. Protected admin/account APIs redirect or return 401 without a session, while database-dependent public APIs return explicit 503 configuration states without `DATABASE_URL`. A live database, Daraja callback, email delivery, external media upload, and production deployment were not verified by this handoff. `npm install` reported eight audit findings; no automatic audit fix was applied because it may introduce breaking dependency changes.
+
 
 ## Key files
 

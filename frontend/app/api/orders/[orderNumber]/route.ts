@@ -3,18 +3,23 @@ import { type NextRequest } from "next/server";
 import { apiError, apiSuccess } from "../../../../lib/server/api-response";
 import { hasDatabaseConfiguration } from "../../../../lib/server/env";
 import { getPrismaClient } from "../../../../lib/server/prisma";
+import { enforceRateLimit } from "../../../../lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest, { params }: { params: { orderNumber: string } }) {
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Order tracking is not configured yet.", 503);
+  const rateLimitResponse = enforceRateLimit(request, "order-tracking", 30, 10 * 60 * 1000);
+  if (rateLimitResponse) return rateLimitResponse;
+  const orderNumber = params.orderNumber.trim().toUpperCase();
+  if (!/^[A-Z0-9-]{4,80}$/.test(orderNumber)) return apiError("VALIDATION_ERROR", "A valid order number is required to track this order.", 400);
   const email = request.nextUrl.searchParams.get("email")?.trim().toLowerCase();
   if (!email || !/^\S+@\S+\.\S+$/.test(email)) return apiError("VALIDATION_ERROR", "An email address is required to track this order.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Order tracking is not configured yet.", 503);
 
   try {
     const order = await getPrismaClient().order.findFirst({
-      where: { orderNumber: params.orderNumber.toUpperCase(), email },
+      where: { orderNumber, email },
       include: {
         shipment: { include: { events: { orderBy: { occurredAt: "asc" } } } },
         statusHistory: { orderBy: { createdAt: "asc" }, select: { toStatus: true, reason: true, createdAt: true } },

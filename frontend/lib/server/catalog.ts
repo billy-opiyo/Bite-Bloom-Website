@@ -12,6 +12,11 @@ const publishedCakeInclude = {
     orderBy: { price: "asc" },
     include: { inventoryItem: { select: { quantityOnHand: true, quantityReserved: true, status: true } } },
   },
+  customizations: {
+    where: { isActive: true },
+    orderBy: { sortOrder: "asc" },
+    include: { values: { where: { isActive: true }, orderBy: { sortOrder: "asc" } } },
+  },
 } satisfies Prisma.CakeInclude;
 
 const publishedCakeDetailInclude = {
@@ -39,6 +44,7 @@ export type CatalogCake = {
   categories: Array<{ name: string; slug: string }>;
   images: Array<{ url: string | null; altText: string | null }>;
   variants: Array<{ id: string; name: string; sku: string; price: number; weightGrams: number | null; available: number; isAvailable: boolean }>;
+  customizations: Array<{ key: string; label: string; type: string; isRequired: boolean; priceDelta: number; values: Array<{ label: string; value: string; priceDelta: number }> }>;
 };
 
 export type CatalogCakeDetail = CatalogCake & {
@@ -86,6 +92,14 @@ function serializeCake(cake: PublishedCake): CatalogCake {
       weightGrams: variant.weightGrams,
       available: Math.max(0, (variant.inventoryItem?.quantityOnHand ?? 0) - (variant.inventoryItem?.quantityReserved ?? 0)),
       isAvailable: Boolean(variant.inventoryItem && variant.inventoryItem.quantityOnHand > variant.inventoryItem.quantityReserved && variant.inventoryItem.status !== "OUT_OF_STOCK"),
+    })),
+    customizations: cake.customizations.map((customization) => ({
+      key: customization.key,
+      label: customization.label,
+      type: customization.type,
+      isRequired: customization.isRequired,
+      priceDelta: Number(customization.priceDelta),
+      values: customization.values.map((value) => ({ label: value.label, value: value.value, priceDelta: Number(value.priceDelta) })),
     })),
   };
 }
