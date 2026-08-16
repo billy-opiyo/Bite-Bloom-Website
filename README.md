@@ -19,7 +19,7 @@ The repository currently contains:
 - Auth.js credentials login, conditional Google provider wiring, customer registration, email verification/resend and password-reset routes, JWT sessions, protected account pages, saved addresses, customer orders, and wishlist operations.
 - Protected account navigation includes a read-only loyalty balance/history view backed by persisted loyalty transactions; points earning and redemption rules remain pending business approval.
 - Customer order tracking, payment retry for an eligible pending M-Pesa order, a server-enforced order state machine, shipment records/events, inventory adjustment, and expired-reservation release APIs.
-- Protected admin APIs for catalog, orders, order notes, shipments, inventory, customers, customer detail, reviews, date-range analytics, contact messages, newsletter records, and coupon promotions. The customer directory opens a protected detail view with order, loyalty, payment, and shipment data. Promotion creation/status changes also write transactional audit records. The admin pages are protected by middleware for `admin` and `owner` roles, and those handlers enforce their seeded permission keys.
+- Protected admin APIs for catalog, orders, order notes, shipments, inventory, customers, customer detail, reviews, date-range analytics, contact messages, newsletter records, coupon promotions, and redacted notification status. The public `/unsubscribe` page/API accepts newsletter opt-out requests without revealing whether an address exists. The customer directory opens a protected detail view with order, loyalty, payment, and shipment data. Promotion creation/status changes also write transactional audit records. The admin pages are protected by middleware for `admin` and `owner` roles, and those handlers enforce their seeded permission keys.
 - Seed data for roles, permissions, an optional owner account, three cakes with size variants and inventory, and the `SWEET10` coupon.
 - Durable Prisma models for commerce, payments, reservations, reviews, wishlist, loyalty, media, notifications, contact/newsletter records, analytics, and audit logs.
 
@@ -31,7 +31,7 @@ The current implementation still needs production hardening and UI integration i
 - The admin page uses protected APIs for catalog, orders, delivery, customers, analytics, inventory, reviews, and communication; the staff section remains an explicitly unconfigured prototype pending the role-access decision.
 - Product and admin image surfaces use placeholders and explicitly identify media uploads as unavailable; no filename-only upload is presented as saved. Cloudflare R2 upload sessions and verified media attachment are not implemented in the current route tree.
 - M-Pesa requires real Daraja credentials and a public HTTPS callback URL. Resend, WhatsApp Cloud, R2, Turnstile/WAF, monitoring, and scheduled-job hosting are not configured in this repository.
-- Focused automated tests cover rate limiting, catalog query validation, request-size/origin policy, promotion input, public custom-request source validation, and account-address validation; API/browser, backup-restore, staging, CI, and deployment verification remain outstanding.
+- Focused automated tests cover rate limiting, catalog query validation, request-size/content-type/origin policy, promotion input, public custom-request source validation, account-address validation, and notification recipient redaction; API/browser, backup-restore, staging, CI, and deployment verification remain outstanding.
 - Business decisions still need confirmation for delivery areas/fees, pickup rules, cancellation/refunds, notifications, retention, and the final catalog.
 
 Treat these limitations as explicit release blockers rather than simulated functionality.
@@ -121,7 +121,7 @@ Never put database, Auth.js, Daraja, or scheduler secrets in `NEXT_PUBLIC_*` var
 
 ## API surface
 
-Public routes include `/api/health`, `/api/cakes` (validated `page`, `pageSize`, `q`, `category`, and `sort` query parameters), `/api/cakes/[slug]`, `/api/cakes/[slug]/reviews`, `/api/cart`, `/api/cart/items`, `/api/cart/coupons`, `/api/checkout`, `/api/checkout/slots`, `/api/orders/[orderNumber]`, `/api/contact`, `/api/newsletter`, and `/api/promotions`.
+Public routes include `/api/health`, `/api/cakes` (validated `page`, `pageSize`, `q`, `category`, and `sort` query parameters), `/api/cakes/[slug]`, `/api/cakes/[slug]/reviews`, `/api/cart`, `/api/cart/items`, `/api/cart/coupons`, `/api/checkout`, `/api/checkout/slots`, `/api/orders/[orderNumber]`, `/api/contact`, `/api/newsletter`, `/api/newsletter/unsubscribe`, and `/api/promotions`.
 
 Authenticated customer routes include `/api/account`, `/api/account/addresses`, `/api/account/cart/merge`, `/api/account/orders`, `/api/account/orders/[orderNumber]`, `/api/account/orders/[orderNumber]/cancel`, `/api/account/wishlist`, and the authenticated order/payment retry paths.
 
@@ -137,7 +137,7 @@ Run these checks after source or schema changes:
 
 ```powershell
 node .\node_modules\typescript\bin\tsc --noEmit -p .\frontend\tsconfig.json
-node --import tsx --test tests/rate-limit.test.ts tests/catalog-query.test.ts tests/request-limits.test.ts tests/promotion-input.test.ts tests/public-forms.test.ts tests/address.test.ts
+node --import tsx --test tests/rate-limit.test.ts tests/catalog-query.test.ts tests/request-limits.test.ts tests/promotion-input.test.ts tests/public-forms.test.ts tests/address.test.ts tests/notification-privacy.test.ts
 node .\node_modules\next\dist\bin\next lint frontend
 node .\node_modules\next\dist\bin\next build frontend
 ```

@@ -19,6 +19,11 @@ export default function WishlistButton({ cakeId, cakeName }: { cakeId: string; c
     const response = saved
       ? await fetch(`/api/account/wishlist/${encodeURIComponent(cakeId)}`, { method: "DELETE" }).catch(() => null)
       : await fetch("/api/account/wishlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cakeId }) }).catch(() => null);
+    if (response?.status === 401) {
+      window.location.assign(`/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`);
+      setBusy(false);
+      return;
+    }
     if (response?.ok) setSaved(!saved);
     setBusy(false);
   }

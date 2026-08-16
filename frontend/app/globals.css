@@ -486,6 +486,19 @@ img {
   font-size: 17px;
 }
 
+.wishlist-availability {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.wishlist-availability-unavailable {
+  color: var(--rose-dark);
+}
+
 .wishlist-card-actions {
   display: flex;
   flex: 0 0 auto;
@@ -5711,6 +5724,54 @@ textarea:focus {
   }
 }
 
+.admin-utility-shell {
+  padding: 12px 24px 0;
+  background: var(--cream);
+}
+
+.admin-utility-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: min(1400px, 100%);
+  margin: 0 auto;
+}
+
+.admin-utility-links a {
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  transition: background .2s ease, color .2s ease, border-color .2s ease;
+}
+
+.admin-utility-links a:hover,
+.admin-utility-links a:focus-visible {
+  border-color: var(--rose-dark);
+  background: var(--paper);
+  color: var(--rose-dark);
+}
+
+@media (max-width: 640px) {
+  .admin-utility-shell {
+    padding: 10px 14px 0;
+  }
+
+  .admin-utility-links {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+  }
+
+  .admin-utility-links a {
+    flex: 0 0 auto;
+  }
+}
+
 @media (max-width: 520px) {
   .customer-detail-profile {
     grid-template-columns: 1fr;
@@ -8127,6 +8188,125 @@ html::-webkit-scrollbar-thumb:hover {
 
 .admin-messages-route .admin-header {
   margin-bottom: 1.5rem;
+}
+
+.admin-notifications-route {
+  min-height: 100vh;
+  padding: 2rem clamp(1rem, 4vw, 4rem);
+}
+
+.admin-notifications-route .admin-header {
+  margin-bottom: 1.5rem;
+}
+
+.admin-audit-route {
+  min-height: 100vh;
+  padding: 2rem clamp(1rem, 4vw, 4rem);
+}
+
+.admin-audit-route .admin-header {
+  margin-bottom: 1.5rem;
+}
+
+.audit-list {
+  display: grid;
+}
+
+.audit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .5rem 1rem;
+  padding: 1rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--plum) 14%, transparent);
+}
+
+.audit-row:first-child {
+  border-top: 0;
+}
+
+.audit-row strong,
+.audit-row small,
+.audit-row span {
+  display: block;
+}
+
+.audit-row small {
+  margin-top: .25rem;
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.audit-row>div:last-child {
+  text-align: right;
+  color: var(--muted);
+  font-size: .75rem;
+}
+
+@media (max-width: 640px) {
+  .audit-row {
+    grid-template-columns: 1fr;
+  }
+
+  .audit-row>div:last-child {
+    text-align: left;
+  }
+}
+
+.notification-list {
+  display: grid;
+}
+
+.notification-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .35rem 1rem;
+  padding: 1rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--plum) 14%, transparent);
+}
+
+.notification-row:first-child {
+  border-top: 0;
+}
+
+.notification-row strong,
+.notification-row small {
+  display: block;
+}
+
+.notification-row small {
+  margin-top: .25rem;
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.notification-row p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: .78rem;
+}
+
+.notification-status {
+  display: inline-block;
+  padding: .2rem .45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-size: .7rem;
+}
+
+.notification-status-delivered,
+.notification-status-sent {
+  background: color-mix(in srgb, var(--sage) 24%, transparent);
+}
+
+.notification-status-failed {
+  background: color-mix(in srgb, #bf6b5b 18%, transparent);
+}
+
+@media (max-width: 640px) {
+  .notification-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .admin-message-list {

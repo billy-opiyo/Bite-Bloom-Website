@@ -11,6 +11,8 @@ const permissions = [
   ["inventory:adjust", "inventory", "adjust"], ["review:create", "review", "create"],
   ["review:moderate", "review", "moderate"], ["customer:read", "customer", "read"],
   ["analytics:read", "analytics", "read"], ["shipment:update", "shipment", "update"],
+  ["notification:read", "notification", "read"],
+  ["audit:read", "audit", "read"],
   ["role:manage", "role", "manage"],
 ] as const;
 

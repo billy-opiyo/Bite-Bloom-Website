@@ -21,11 +21,15 @@ function email(value: unknown): string | null {
   return normalized && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) ? normalized : null;
 }
 
+export function parseEmailAddress(value: unknown): string | null {
+  return email(value);
+}
+
 export function parseContactMessage(value: unknown): ContactMessageInput | null {
   if (!value || typeof value !== "object") return null;
   const input = value as Record<string, unknown>;
   const name = text(input.name, 2, 120);
-  const address = email(input.email);
+  const address = parseEmailAddress(input.email);
   const message = text(input.message, 5, 4000);
   if (!name || !address || !message) return null;
   const source = typeof input.source === "string" && /^[a-z0-9_-]{1,48}$/.test(input.source) ? input.source : "website";
@@ -35,7 +39,7 @@ export function parseContactMessage(value: unknown): ContactMessageInput | null 
 export function parseNewsletter(value: unknown): NewsletterInput | null {
   if (!value || typeof value !== "object") return null;
   const input = value as Record<string, unknown>;
-  const address = email(input.email);
+  const address = parseEmailAddress(input.email);
   if (!address || input.consent !== true) return null;
   return { email: address, consent: true };
 }

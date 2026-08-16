@@ -18,7 +18,7 @@ This plan reflects the current source tree. A feature is not considered complete
 ### Implemented
 
 - Next.js App Router pages, layouts, responsive styling, theme support, loading/not-found states, sitemap, robots, and manifest.
-- Public routes for home, catalog, categories, product detail, cart, checkout, tracking, contact, FAQ, offers, about, privacy, terms, and cookies.
+- Public routes for home, catalog, categories, product detail, cart, checkout, tracking, contact, FAQ, offers, about, privacy, terms, cookies, and noindex newsletter preferences.
 - Prisma schema, Prisma client helper, server API response helpers, environment checks, and idempotent development seed.
 - Public catalog/detail/review APIs with server-calculated availability and active customization definitions.
 - Guest cart cookie, cart item operations, coupons, server-side customizations/pricing, checkout validation, delivery/pickup, scheduled dates/slots, immutable order snapshots, and inventory reservations.
@@ -31,7 +31,7 @@ This plan reflects the current source tree. A feature is not considered complete
 - Storefront pages use live APIs for the main catalog/cart/checkout path, but product media is still placeholder-driven and the home page contains presentation content that needs final business configuration.
 - The admin page is protected and API-connected for catalog, orders, delivery, customers, analytics, inventory, reviews, and communication; the staff section remains an explicitly unconfigured prototype pending the approved role-access policy.
 - Database role/permission records are seeded, but handlers primarily use coarse admin/owner checks rather than a complete granular permission matrix.
-- Contact/newsletter records and verification/reset tokens are persisted. Basic in-process rate limiting, local consent capture, and protected admin communication visibility are implemented; email/WhatsApp delivery, consent history, distributed limits, and retries remain incomplete.
+- Contact/newsletter records and verification/reset tokens are persisted. Basic in-process rate limiting, local consent capture, a public newsletter unsubscribe workflow, and protected admin communication visibility are implemented; email/WhatsApp delivery, consent history, distributed limits, and retries remain incomplete.
 - Prisma models exist for R2 media, notifications, loyalty, analytics events/daily metrics, refunds, and audit coverage, but the full provider/workflow surface is not connected.
 
 ### Blocked or not started
@@ -102,7 +102,7 @@ This plan reflects the current source tree. A feature is not considered complete
 - [x] Add protected read-only loyalty balance/history API and account navigation; [ ] approve and implement points earning, redemption, and expiry rules.
 - [x] Add authenticated order detail, status history, safe cancellation, print-ready receipt view, and server-validated reorder using stored variant IDs.
 - [x] Add basic in-process rate limits to contact, newsletter, registration, and password-reset requests.
-- [x] Add local necessary/optional consent capture and protected admin visibility/status updates for contact/newsletter records; [ ] add distributed limits, notification delivery records/retries, and provider delivery.
+- [x] Add local necessary/optional consent capture, a public newsletter unsubscribe page/API, protected admin visibility/status updates for contact/newsletter records, and privacy-scoped notification delivery metadata; [ ] add distributed limits, notification retries, and provider delivery.
 
 ### Phase 5 — Order operations and delivery
 
@@ -123,7 +123,7 @@ This plan reflects the current source tree. A feature is not considered complete
 - [x] Replace overview, delivery, customer directory, and analytics sample metrics with API-backed, empty-safe screens; cake availability toggles, inventory restock, order status, and review moderation now persist through protected APIs.
 - [x] Connect the admin customer directory's View action to a protected customer detail page with privacy-scoped profile, order, loyalty, payment, and shipment information.
 - [x] Remove fabricated fallback records from catalog/order/inventory/review views when protected APIs are unavailable; [x] remove the simulated admin role switch; [ ] connect staff/login-audit/export workflows and replace remaining prototype staff actions.
-- [x] Enforce seeded permission keys across existing admin/owner handlers; [ ] decide whether non-admin staff roles may enter the admin surface, then implement staff/role management, audit coverage, event collection, daily aggregation, exports, and privacy-scoped customer operations.
+- [x] Enforce seeded permission keys across existing admin/owner handlers and add protected notification/audit read surfaces; [ ] decide whether non-admin staff roles may enter the admin surface, then complete staff/role management, audit coverage, event collection, daily aggregation, exports, and privacy-scoped customer operations.
 
 ### Phase 7 — Trust, retention, and advanced selling
 
@@ -131,9 +131,10 @@ This plan reflects the current source tree. A feature is not considered complete
 
 - [x] Delivered-order review submission and protected moderation exist.
 - [x] Authenticated wishlist operations exist.
+- [x] Wishlist entries expose current server-derived availability and guest save actions provide a sign-in return path.
 - [x] Add customer review submission UX with delivered-order validation, moderation messaging, and abuse throttling.
 - [x] Add protected coupon promotion CRUD at `/admin/promotions`, validated start/end scheduling, truthful active/scheduled/expired admin states, transactional audit records, and a public live-offers endpoint/page backed by the existing server-side cart coupon engine.
-- [ ] Add review-photo attachments, loyalty ledger/rewards, referrals, abandoned-cart recovery, reminders, and wishlist availability synchronization; extend promotions to flash sales, cake/category targeting, and campaign scheduling as business rules are approved.
+- [ ] Add review-photo attachments, loyalty ledger/rewards, referrals, abandoned-cart recovery, and reminders; extend promotions to flash sales, cake/category targeting, and campaign scheduling as business rules are approved.
 
 ### Phase 8 — Media, custom requests, AI, subscriptions, and branches
 
@@ -148,7 +149,7 @@ This plan reflects the current source tree. A feature is not considered complete
 
 **Status: Partial**
 
-- [x] Add baseline security response headers/CSP (with development-only `unsafe-eval`), basic in-process rate limiting, a same-origin guard for browser mutations, and a 1 MiB declared API body-size guard.
+- [x] Add baseline security response headers/CSP (with development-only `unsafe-eval`), basic in-process rate limiting, a same-origin guard for browser mutations, a 1 MiB declared API body-size guard, and middleware JSON content-type validation for non-Auth API mutations.
 - [ ] Complete CSRF review, distributed rate limits, Turnstile/WAF, secret management, structured logs, monitoring, and error reporting.
 - [x] Add baseline product metadata and structured data plus a persistent necessary/optional cookie-consent control; [ ] complete image optimization, performance review, keyboard/contrast/screen-reader review, consent copy/legal approval.
 - [ ] Validate all public and admin forms against direct API misuse and oversized/untrusted input.
@@ -158,7 +159,7 @@ This plan reflects the current source tree. A feature is not considered complete
 **Status: Partial**
 
 - [ ] Create migration, staging, CI, deployment, backup, restore, rollback, and incident runbooks.
-- [x] Add focused automated tests for the rate-limit core, catalog query validation, request-size/origin policy, promotion input, public custom-request source validation, and account-address validation.
+- [x] Add focused automated tests for the rate-limit core, catalog query validation, request-size/origin policy, promotion input, public custom-request source validation, account-address validation, and notification recipient redaction.
 - [ ] Expand unit, API, integration, and browser coverage proportional to payment, inventory, auth, and admin risk.
 - [ ] Verify a disposable database restore and a complete staging order from checkout through completion using `docs/STAGING_SMOKE_TEST_CHECKLIST.md`.
 - [ ] Perform mobile/browser smoke tests and record release evidence before production.

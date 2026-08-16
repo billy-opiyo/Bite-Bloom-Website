@@ -7,7 +7,7 @@
     "build": "next build frontend",
     "start": "next start frontend",
     "lint": "next lint frontend",
-    "test": "node --import tsx --test tests/rate-limit.test.ts tests/catalog-query.test.ts tests/request-limits.test.ts tests/promotion-input.test.ts tests/public-forms.test.ts tests/address.test.ts",
+    "test": "node --import tsx --test tests/rate-limit.test.ts tests/catalog-query.test.ts tests/request-limits.test.ts tests/promotion-input.test.ts tests/public-forms.test.ts tests/address.test.ts tests/notification-privacy.test.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
