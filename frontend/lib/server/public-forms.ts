@@ -1,9 +1,8 @@
-import "server-only";
-
 export type ContactMessageInput = {
   name: string;
   email: string;
   message: string;
+  source?: string;
 };
 
 export type NewsletterInput = {
@@ -29,7 +28,8 @@ export function parseContactMessage(value: unknown): ContactMessageInput | null 
   const address = email(input.email);
   const message = text(input.message, 5, 4000);
   if (!name || !address || !message) return null;
-  return { name, email: address, message };
+  const source = typeof input.source === "string" && /^[a-z0-9_-]{1,48}$/.test(input.source) ? input.source : "website";
+  return { name, email: address, message, source };
 }
 
 export function parseNewsletter(value: unknown): NewsletterInput | null {

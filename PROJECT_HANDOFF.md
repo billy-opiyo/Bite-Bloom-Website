@@ -1,6 +1,6 @@
 # Bite & Bloom — Current Project Handoff
 
-**Last reviewed:** 15 August 2026
+**Last reviewed:** 16 August 2026
 **Repository state:** active MVP implementation; production launch is still blocked by migrations, provider setup, testing, and incomplete admin UI integration.
 
 ## Executive summary
@@ -9,7 +9,11 @@ The repository has moved beyond the original browser-only prototype. The live ar
 
 The customer journey is substantially implemented: catalog data, product detail, cart, coupon, checkout, inventory reservation, order creation, M-Pesa/COD payment foundations, account resources, tracking, reviews, contact, and newsletter records have server routes. Authentication and coarse admin protection are also present.
 
-The remaining work is primarily integration and release hardening. Admin catalog, orders, delivery, customer directory, analytics, inventory, reviews, and communication views now consume protected APIs with explicit empty states; the staff view remains a clearly labeled prototype pending the role-access decision, media upload is not connected to R2, external providers are not configured, the database has no migration history, and automated/staging verification is absent.
+The remaining work is primarily integration and release hardening. Admin catalog, orders, delivery, customer directory, analytics, inventory, reviews, and communication views now consume protected APIs with explicit empty states; the staff view remains a clearly labeled prototype pending the role-access decision, the admin UI no longer simulates role switching, media upload is not connected to R2, external providers are not configured, the database has no migration history, and staging execution/release verification is absent. The source-aligned staging checklist is [STAGING_SMOKE_TEST_CHECKLIST.md](docs/STAGING_SMOKE_TEST_CHECKLIST.md).
+
+The homepage post-checkout status display refreshes from the protected order-tracking endpoint; its local “Preview next update” prototype action was removed in favor of the real `/tracking` route.
+
+The public `/tracking` result now refreshes its server status automatically every 30 seconds while the page is open.
 
 ## Implemented surface
 
@@ -26,9 +30,10 @@ The public layout includes the branded navigation/footer, responsive actions, th
 - Auth.js credentials login uses Prisma and bcrypt with JWT sessions.
 - Registration creates a customer account and can associate eligible prior guest orders by email.
 - New password accounts remain `PENDING` until the single-use verification token is consumed; registration no longer auto-signs the user in.
-- Forgot-password, reset-password, and email-verification pages/routes use database verification tokens with expiry.
+- Forgot-password, reset-password, email-verification, and rate-limited verification-resend pages/routes use database verification tokens with expiry; password-reset token cleanup now targets its namespaced identifier correctly, and each token endpoint rejects tokens belonging to the other flow before touching user records.
 - Middleware protects `/admin/:path*` for sessions carrying the `admin` or `owner` role.
-- Account routes cover profile updates, addresses, order history/detail, and wishlist operations.
+- Account routes cover profile updates, address create/edit/delete/default management, order history/detail, and wishlist operations; the account page now exposes those address controls through the protected endpoints.
+- Address deletion preserves the default-address invariant by promoting the most recently updated remaining address inside the same transaction.
 - `/account/orders/[orderNumber]` now provides authenticated status history, print-ready receipt output, safe cancellation when eligible, and reorder actions that revalidate each stored variant through the cart API.
 - Google OAuth provider/button wiring is conditional on `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`; live callback verification and provider credentials remain pending. Provider email delivery, granular permission checks, invitations, and full account deletion/retention workflows are not complete.
 
@@ -45,8 +50,10 @@ The public layout includes the branded navigation/footer, responsive actions, th
 - Authenticated account loading now merges the current guest cart into the account cart through `/api/account/cart/merge`.
 - Cart item changes and coupon operations are server-backed; prices are re-read from the catalog.
 - Signed-in customers can save a cart cake for later; the cart moves it into the server-backed wishlist and removes it from the active cart.
+- Account navigation now exposes a protected loyalty history page backed by stored balances and transactions; earning, redemption, and expiry rules are intentionally not invented.
 - The seeded catalog contains three cakes, three size variants per cake, inventory, and one `SWEET10` coupon.
-- Catalogue search/category/sort filters are validated at the API boundary, results are capped at 100 per page, and the shop has a bounded load-more path. Complete production imagery, R2 uploads, all planned categories, and richer catalog administration remain incomplete.
+- Catalogue search/category/sort filters are validated at the API boundary, results are capped at 100 per page, and the shop has a bounded load-more path. Product and admin media controls now explicitly identify unavailable uploads instead of collecting a filename as if it were saved; complete production imagery, R2 uploads, all planned categories, and richer catalog administration remain incomplete.
+- `/custom-cake` captures a structured text brief through the rate-limited contact endpoint with `custom-cake` source tagging; verified reference-image uploads and quotations remain gated on R2 and business policy.
 
 ### Checkout, payment, and inventory
 
@@ -72,20 +79,20 @@ The public layout includes the branded navigation/footer, responsive actions, th
 - Review submissions are protected by the shared in-process rate limiter in addition to delivered-order ownership checks.
 - The public review page now provides a validated delivered-order submission form with moderation feedback; review-photo uploads are intentionally still gated on the verified media/R2 flow.
 - Protected `/admin/messages` reads persisted contact messages and newsletter subscribers, and contact message status changes are audited transactionally.
-- Protected `/admin/promotions` manages validated coupon records and activation state; public `/offers` and `/api/promotions` expose only active promotions within their configured date windows.
+- Protected `/admin/promotions` manages validated coupon records, start/end scheduling, and truthful active/scheduled/expired states, with transactional audit records; public `/offers` and `/api/promotions` expose only active promotions within their configured date windows.
 - Admin order printing now opens a protected, server-backed receipt route using immutable order item and total snapshots.
-- The admin driver selector now persists courier assignments through the protected shipment endpoint; status transitions remain governed by the order state machine.
+- The admin courier field now persists assignments through the protected shipment endpoint without fabricating driver identities; a verified staff directory and richer dispatch workflows remain pending. Status transitions remain governed by the order state machine.
 - Protected date-range analytics returns sales, paid revenue, customer-repeat, daily, and top-cake metrics; the admin overview and analytics screens now render those values when available.
 - Delivery staff assignment, proof of delivery, courier/ETA integration, invoices, exports, refunds, notifications, and analytics aggregation remain incomplete.
 
 ## Admin status
 
-`frontend/app/admin/page.tsx` and `/admin/messages` are protected by `frontend/middleware.ts`. Catalog, review, inventory, order status, overview metrics, delivery shipment summaries, customer aggregates, analytics, and persisted communication records now connect to protected APIs. Existing admin APIs enforce their seeded permission keys after the admin/owner role check; staff management, login-audit telemetry, exports, and some fallback state remain incomplete.
+`frontend/app/admin/page.tsx`, `/admin/messages`, and `/admin/customers/[email]` are protected by `frontend/middleware.ts`. Catalog, review, inventory, order status, overview metrics, delivery shipment summaries, customer aggregates/detail, analytics, and persisted communication records now connect to protected APIs. Existing admin APIs enforce their seeded permission keys after the admin/owner role check; staff management, login-audit telemetry, exports, and some fallback state remain incomplete.
 
 | Area | Current state |
 | --- | --- |
 | Catalog | API-backed list/create/update foundation, persisted availability toggle, and category-aware catalogue data; media, category management, and full editor integration remain. |
-| Promotions | Protected coupon CRUD and activation UI are implemented; flash sales, targeting, loyalty/referrals, and automated campaign scheduling remain. |
+| Promotions | Protected coupon CRUD, date-window scheduling, and active/scheduled/expired admin states are implemented; flash sales, targeting, loyalty/referrals, and automated campaign orchestration remain. |
 | Reviews | API-backed loading and moderation UI. |
 | Inventory | API-backed listing/restock foundation; purchase orders and richer stock workflow remain. |
 | Orders | Protected API-backed loading, status updates, detail retrieval, and print-ready receipts are connected; exports, driver assignment, and richer fulfillment actions remain. |
@@ -115,7 +122,7 @@ The role selector in the page must never be treated as authorization. Server ses
 5. Add unit/API/browser tests and CI checks for permission enforcement, price tampering, invalid variants, coupon abuse, duplicate checkout/callbacks, reservation expiry, and order transitions.
 6. Complete business decisions for delivery coverage/fees, pickup, slots, cancellation/refunds, privacy/retention, final catalog, and legal copy.
 
-Baseline security headers/CSP (with development-only `unsafe-eval`), a database-aware sitemap, a tested in-process rate-limit core, and a 1 MiB declared API body-size guard are now present; duplicate header configuration has been consolidated. The rate-limit test also prompted the missing `server-only` dependency to be added explicitly. The body-size guard protects declared `Content-Length` values only and does not replace distributed limits, WAF/bot protection, or provider-level controls. The npm install reported eight audit findings; dependency upgrades require a separate review.
+Baseline security headers/CSP (with development-only `unsafe-eval`), a database-aware sitemap, a tested in-process rate-limit core, a same-origin browser mutation guard, and a 1 MiB declared API body-size guard are now present; duplicate header configuration has been consolidated. The rate-limit test also prompted the missing `server-only` dependency to be added explicitly. These guards are defense-in-depth and do not replace distributed limits, WAF/bot protection, or provider-level controls. The npm install reported eight audit findings; dependency upgrades require a separate review.
 
 ## Recommended next sequence
 
@@ -128,7 +135,7 @@ Baseline security headers/CSP (with development-only `unsafe-eval`), a database-
 
 ## Validation notes
 
-The documentation describes source-level implementation found in the repository on 15 August 2026. The direct TypeScript check, focused rate-limit/catalog-query/request-size/promotion tests (8 passing), Prisma generate/validate checks, lint, and diff check pass. Local preview smoke checks returned 200 for `/`, `/cart`, `/offers`, `/cakes`, `/faq`, and `/privacy`; protected admin surfaces redirect to login when a temporary local-only `NEXTAUTH_SECRET` is supplied, and database-dependent public APIs return explicit 503 configuration states without `DATABASE_URL`. Admin operational views no longer fabricate records when their protected APIs are unavailable. A full `next build frontend` attempt with process-only local placeholders timed out after 180 seconds after webpack cache snapshot warnings; it is not represented as a successful production build. `npm install` reported eight audit findings; no automatic audit fix was applied because it may introduce breaking dependency changes. Basic in-process rate limits now protect public contact/newsletter, registration/password-reset, and review submission requests; these limits are not a substitute for distributed production throttling. Cookie consent is implemented locally, but final consent copy/legal approval and any optional provider integration remain pending. A live database, Daraja callback, email delivery, external media upload, and production deployment were not verified by this handoff. Run the checks in [README.md](README.md#verification) after configuring a safe development database and unique local `NEXTAUTH_SECRET`.
+The documentation describes source-level implementation found in the repository on 15 August 2026. The direct TypeScript check, focused rate-limit/catalog-query/request-size/origin/promotion/public-form/address tests (14 passing), Prisma generate/validate checks, lint, and diff check pass. Local preview smoke checks returned 200 for `/`, `/cart`, `/offers`, `/custom-cake`, `/account/loyalty`, `/cakes`, `/faq`, and `/privacy`; protected admin/account APIs redirect or return 401 without a session, and database-dependent public APIs return explicit 503 configuration states without `DATABASE_URL`. Mutating API requests with a mismatched browser `Origin` are rejected with 403, while server callbacks without an Origin header remain allowed. Admin operational views no longer fabricate records when their protected APIs are unavailable. A full `next build frontend` attempt with process-only local placeholders timed out after 180 seconds after webpack cache snapshot warnings; it is not represented as a successful production build. `npm install` reported eight audit findings; no automatic audit fix was applied because it may introduce breaking dependency changes. Basic in-process rate limits now protect public contact/newsletter, registration/password-reset, and review submission requests; these limits are not a substitute for distributed production throttling. Cookie consent is implemented locally, but final consent copy/legal approval and any optional provider integration remain pending. A live database, Daraja callback, email delivery, external media upload, and production deployment were not verified by this handoff. Run the checks in [README.md](README.md#verification) after configuring a safe development database and unique local `NEXTAUTH_SECRET`.
 
 ## Key files
 

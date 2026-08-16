@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (user) {
       const token = randomBytes(32).toString("hex");
-      await prisma.$transaction([prisma.verificationToken.deleteMany({ where: { identifier: email } }), prisma.verificationToken.create({ data: { identifier: `password-reset:${email}`, token, expires: new Date(Date.now() + 60 * 60 * 1000) } }), prisma.notification.create({ data: { userId: user.id, channel: "EMAIL", template: "PASSWORD_RESET", recipient: email, payload: { token } } })]);
+      await prisma.$transaction([prisma.verificationToken.deleteMany({ where: { identifier: `password-reset:${email}` } }), prisma.verificationToken.create({ data: { identifier: `password-reset:${email}`, token, expires: new Date(Date.now() + 60 * 60 * 1000) } }), prisma.notification.create({ data: { userId: user.id, channel: "EMAIL", template: "PASSWORD_RESET", recipient: email, payload: { token } } })]);
     }
     return apiSuccess({ accepted: true, message: "If an account exists, reset instructions will be sent shortly." });
   } catch { return apiError("DATABASE_UNAVAILABLE", "Unable to start password reset right now.", 503); }

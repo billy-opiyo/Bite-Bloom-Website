@@ -3,7 +3,7 @@ import { listPublishedCakes } from "../lib/server/catalog";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = process.env.NEXT_PUBLIC_SITE_URL || "https://biteandbloom.co.ke";
-  const staticRoutes = ["/", "/cakes", "/about", "/faq", "/contact", "/offers", "/privacy", "/terms", "/cookies"];
+  const staticRoutes = ["/", "/cakes", "/about", "/faq", "/contact", "/custom-cake", "/offers", "/privacy", "/terms", "/cookies"];
   let cakeRoutes: MetadataRoute.Sitemap = [];
   try {
     const cakes = await listPublishedCakes();

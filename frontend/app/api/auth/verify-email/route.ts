@@ -12,8 +12,10 @@ export async function POST(request: NextRequest) {
   try {
     const prisma = getPrismaClient();
     const record = await prisma.verificationToken.findUnique({ where: { token } });
-    if (!record || record.expires < new Date()) return apiError("VALIDATION_ERROR", "That verification link has expired.", 400);
-    await prisma.$transaction([prisma.user.update({ where: { email: record.identifier }, data: { emailVerified: new Date(), status: "ACTIVE" } }), prisma.verificationToken.delete({ where: { token } })]);
+    if (!record || record.expires < new Date() || record.identifier.includes(":") || !/^\S+@\S+\.\S+$/.test(record.identifier)) return apiError("VALIDATION_ERROR", "That verification link has expired.", 400);
+    const user = await prisma.user.findUnique({ where: { email: record.identifier }, select: { id: true } });
+    if (!user) return apiError("VALIDATION_ERROR", "That verification link has expired.", 400);
+    await prisma.$transaction([prisma.user.update({ where: { id: user.id }, data: { emailVerified: new Date(), status: "ACTIVE" } }), prisma.verificationToken.delete({ where: { token } })]);
     return apiSuccess({ verified: true, message: "Your email has been verified." });
   } catch { return apiError("DATABASE_UNAVAILABLE", "Unable to verify this email right now.", 503); }
 }

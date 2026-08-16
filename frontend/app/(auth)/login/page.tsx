@@ -48,12 +48,13 @@ export default function LoginPage() {
           <span>Password</span>
           <input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
         </label>
-        {registered && <p role="status">Account created. Check your email and verify it before signing in.</p>}
+        {registered && <p role="status">Account created. Check your email and verify it before signing in. <Link href="/resend-verification">Resend the link</Link></p>}
         {error && <p role="alert">{error}</p>}
         <button className="button button-dark" type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Signing in…" : "Sign in"}
         </button>
         <p>Need an account? <Link href="/register">Create one</Link></p>
+        <p><Link href="/resend-verification">Need a new verification link?</Link></p>
       </form>
     </main>
   );

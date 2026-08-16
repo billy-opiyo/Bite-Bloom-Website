@@ -4,20 +4,22 @@ Bite & Bloom is a Kenya-focused cake storefront and bakery operations platform. 
 
 **Repository state:** active MVP implementation; not launch-ready yet.
 
-**Last reviewed:** 15 August 2026
+**Last reviewed:** 16 August 2026
 
 ## What is working
 
 The repository currently contains:
 
 - A responsive branded storefront with home, catalog, category, product, cart, checkout, tracking, contact, FAQ, offers, about, privacy, terms, and cookies pages.
+- A structured `/custom-cake` request form for event, guest count, budget, theme, and design details; image attachments remain disabled until verified media storage is configured.
 - Catalog data loaded from Prisma through public cake list/detail/review APIs. Active variants expose availability as `quantityOnHand - quantityReserved`.
 - Guest cart persistence through the HTTP-only `bite_bloom_cart` cookie, server-side price/customization validation, coupon application/removal, delivery scheduling, and inventory reservations.
 - Signed-in customers can save a cake from the cart for later through the server-backed wishlist.
 - Checkout for delivery or pickup, future dates within the server validation window, fixed delivery slots, M-Pesa STK Push when Daraja is configured, and cash-on-delivery confirmation through WhatsApp.
-- Auth.js credentials login, conditional Google provider wiring, customer registration, email verification and password-reset routes, JWT sessions, protected account pages, saved addresses, customer orders, and wishlist operations.
+- Auth.js credentials login, conditional Google provider wiring, customer registration, email verification/resend and password-reset routes, JWT sessions, protected account pages, saved addresses, customer orders, and wishlist operations.
+- Protected account navigation includes a read-only loyalty balance/history view backed by persisted loyalty transactions; points earning and redemption rules remain pending business approval.
 - Customer order tracking, payment retry for an eligible pending M-Pesa order, a server-enforced order state machine, shipment records/events, inventory adjustment, and expired-reservation release APIs.
-- Protected admin APIs for catalog, orders, order notes, shipments, inventory, customers, reviews, date-range analytics, contact messages, and newsletter records. The admin pages are protected by middleware for `admin` and `owner` roles, and those handlers enforce their seeded permission keys.
+- Protected admin APIs for catalog, orders, order notes, shipments, inventory, customers, customer detail, reviews, date-range analytics, contact messages, newsletter records, and coupon promotions. The customer directory opens a protected detail view with order, loyalty, payment, and shipment data. Promotion creation/status changes also write transactional audit records. The admin pages are protected by middleware for `admin` and `owner` roles, and those handlers enforce their seeded permission keys.
 - Seed data for roles, permissions, an optional owner account, three cakes with size variants and inventory, and the `SWEET10` coupon.
 - Durable Prisma models for commerce, payments, reservations, reviews, wishlist, loyalty, media, notifications, contact/newsletter records, analytics, and audit logs.
 
@@ -27,9 +29,9 @@ The current implementation still needs production hardening and UI integration i
 
 - `prisma/migrations/` is empty. Use `db:push` only for local development until a reviewed migration baseline is created; do not treat the current schema as deployed production state.
 - The admin page uses protected APIs for catalog, orders, delivery, customers, analytics, inventory, reviews, and communication; the staff section remains an explicitly unconfigured prototype pending the role-access decision.
-- Product and admin image controls currently collect/display filenames or placeholders. Cloudflare R2 upload sessions and verified media attachment are not implemented in the current route tree.
+- Product and admin image surfaces use placeholders and explicitly identify media uploads as unavailable; no filename-only upload is presented as saved. Cloudflare R2 upload sessions and verified media attachment are not implemented in the current route tree.
 - M-Pesa requires real Daraja credentials and a public HTTPS callback URL. Resend, WhatsApp Cloud, R2, Turnstile/WAF, monitoring, and scheduled-job hosting are not configured in this repository.
-- Focused automated tests cover rate limiting, catalog query validation, request-size policy, and promotion input validation; API/browser, backup-restore, staging, CI, and deployment verification remain outstanding.
+- Focused automated tests cover rate limiting, catalog query validation, request-size/origin policy, promotion input, public custom-request source validation, and account-address validation; API/browser, backup-restore, staging, CI, and deployment verification remain outstanding.
 - Business decisions still need confirmation for delivery areas/fees, pickup rules, cancellation/refunds, notifications, retention, and the final catalog.
 
 Treat these limitations as explicit release blockers rather than simulated functionality.
@@ -135,16 +137,17 @@ Run these checks after source or schema changes:
 
 ```powershell
 node .\node_modules\typescript\bin\tsc --noEmit -p .\frontend\tsconfig.json
-node --import tsx --test tests/rate-limit.test.ts tests/catalog-query.test.ts tests/request-limits.test.ts tests/promotion-input.test.ts
+node --import tsx --test tests/rate-limit.test.ts tests/catalog-query.test.ts tests/request-limits.test.ts tests/promotion-input.test.ts tests/public-forms.test.ts tests/address.test.ts
 node .\node_modules\next\dist\bin\next lint frontend
 node .\node_modules\next\dist\bin\next build frontend
 ```
 
-Type-check and build are separate checks. Direct local binaries avoid the `&` path parsing issue on Windows in this repository. Lint currently completes without warnings. API middleware rejects declared request bodies over 1 MiB; this is only a baseline guard and does not replace distributed production throttling or WAF controls. A valid database URL may be required by build-time imports or Prisma initialization. Manual smoke testing should cover catalog loading, add-to-cart, checkout validation, account ownership, admin authorization, reservation expiry, and the configured payment callback before any release.
+Type-check and build are separate checks. Direct local binaries avoid the `&` path parsing issue on Windows in this repository. Lint currently completes without warnings. API middleware rejects declared request bodies over 1 MiB and mismatched browser mutation origins; these are baseline guards and do not replace distributed production throttling, CSRF defense-in-depth, or WAF controls. A valid database URL may be required by build-time imports or Prisma initialization. Manual smoke testing should cover catalog loading, add-to-cart, checkout validation, account ownership, admin authorization, reservation expiry, and the configured payment callback before any release.
 
 ## Related documentation
 
 - [Current project handoff](PROJECT_HANDOFF.md)
 - [Feature implementation plan](PROJECT_FEATURES_IMPLEMENTATION_PLAN.md)
 - [Database and workflow architecture](docs/architecture/database-and-workflows.md)
+- [Staging smoke-test checklist](docs/STAGING_SMOKE_TEST_CHECKLIST.md)
 - [Engineering and security rules](rules.md)

@@ -15,7 +15,10 @@ export async function POST(request: NextRequest) {
     const record = await prisma.verificationToken.findUnique({ where: { token: input.token } });
     if (!record || !record.identifier.startsWith("password-reset:") || record.expires < new Date()) return apiError("VALIDATION_ERROR", "That reset link has expired.", 400);
     const email = record.identifier.slice("password-reset:".length);
-    await prisma.$transaction([prisma.user.update({ where: { email }, data: { passwordHash: await hash(input.password, 12), status: "ACTIVE" } }), prisma.verificationToken.delete({ where: { token: input.token } })]);
+    if (!/^\S+@\S+\.\S+$/.test(email)) return apiError("VALIDATION_ERROR", "That reset link has expired.", 400);
+    const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (!user) return apiError("VALIDATION_ERROR", "That reset link has expired.", 400);
+    await prisma.$transaction([prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hash(input.password, 12), status: "ACTIVE" } }), prisma.verificationToken.delete({ where: { token: input.token } })]);
     return apiSuccess({ reset: true, message: "Your password has been updated." });
   } catch { return apiError("DATABASE_UNAVAILABLE", "Unable to reset your password right now.", 503); }
 }

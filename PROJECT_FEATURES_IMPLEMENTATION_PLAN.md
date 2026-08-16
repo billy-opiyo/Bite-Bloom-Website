@@ -1,6 +1,6 @@
 # Bite & Bloom — Feature Implementation Plan
 
-**Last reviewed:** 15 August 2026
+**Last reviewed:** 16 August 2026
 **Current milestone:** server-backed MVP foundation and storefront integration
 **Release status:** not launch-ready
 
@@ -60,7 +60,7 @@ This plan reflects the current source tree. A feature is not considered complete
 
 - [x] Reusable cake, cart, checkout, homepage, layout, tracking, legal, and shared state components exist.
 - [x] Responsive theme, navigation, splash/loading, floating public actions, and dynamic footer behavior exist.
-- [ ] Remove remaining page-local sample data and connect every visible metric/action to a source of truth.
+- [ ] Remove remaining page-local sample data and connect every visible metric/action to a source of truth; the homepage tracking preview control has been replaced with server-refreshed status and a real tracking route.
 - [x] Add global reduced-motion handling and visible keyboard focus rings; [ ] complete accessibility review, mobile breakpoints, focus management, and image alt/fallback review.
 - [ ] Replace placeholder business copy/contact/social/map values with approved configuration.
 
@@ -94,11 +94,12 @@ This plan reflects the current source tree. A feature is not considered complete
 
 **Status: Partial**
 
-- [x] Credentials login, registration, JWT session, verification/reset route foundations, account profile, addresses, orders, and wishlist exist.
+- [x] Credentials login, registration, JWT session, verification/reset/resend route foundations, account profile, address create/edit/delete/default management, orders, and wishlist exist.
 - [x] Customer ownership is checked in account/order resources.
 - [x] Require the single-use verification token before password-account activation; [ ] configure secure email delivery and complete delivery/failure handling.
 - [x] Add conditional Google OAuth provider/button wiring; [ ] configure approved credentials and verify the live callback.
-- [ ] Add granular RBAC, staff invitations, account deletion/retention, loyalty UI, and communication preferences.
+- [ ] Add granular RBAC, staff invitations, account deletion/retention, and communication preferences.
+- [x] Add protected read-only loyalty balance/history API and account navigation; [ ] approve and implement points earning, redemption, and expiry rules.
 - [x] Add authenticated order detail, status history, safe cancellation, print-ready receipt view, and server-validated reorder using stored variant IDs.
 - [x] Add basic in-process rate limits to contact, newsletter, registration, and password-reset requests.
 - [x] Add local necessary/optional consent capture and protected admin visibility/status updates for contact/newsletter records; [ ] add distributed limits, notification delivery records/retries, and provider delivery.
@@ -107,9 +108,9 @@ This plan reflects the current source tree. A feature is not considered complete
 
 **Status: Partial**
 
-- [x] Server order state machine, status history, customer tracking, admin order updates/notes, shipment records/events, and inventory consumption/release foundations exist.
+- [x] Server order state machine, status history, customer tracking with automatic public-page refresh, admin order updates/notes, shipment records/events, and inventory consumption/release foundations exist.
 - [ ] Connect admin order/delivery screens to APIs and add proof of delivery, courier/ETA integration, pickup readiness, cancellation, exports, and refunds.
-- [x] Connect the admin driver selector to validated shipment courier assignment; [ ] add driver identity management and richer dispatch workflows.
+- [x] Connect the admin courier field to validated shipment assignment without fabricated driver identities; [ ] add driver identity management and richer dispatch workflows.
 - [x] Add protected admin order detail retrieval and a print-ready receipt route for the existing order action.
 - [ ] Configure and schedule reservation expiry; add status notifications with retry/deduplication.
 
@@ -120,7 +121,8 @@ This plan reflects the current source tree. A feature is not considered complete
 - [x] Protected admin route, catalog CRUD foundation, inventory list/adjustment, customer list/detail, review moderation, shipment, order, and analytics APIs exist.
 - [x] Seeded roles and permissions cover the initial operating roles.
 - [x] Replace overview, delivery, customer directory, and analytics sample metrics with API-backed, empty-safe screens; cake availability toggles, inventory restock, order status, and review moderation now persist through protected APIs.
-- [x] Remove fabricated fallback records from catalog/order/inventory/review views when protected APIs are unavailable; [ ] connect staff/login-audit/export workflows and replace remaining prototype staff actions.
+- [x] Connect the admin customer directory's View action to a protected customer detail page with privacy-scoped profile, order, loyalty, payment, and shipment information.
+- [x] Remove fabricated fallback records from catalog/order/inventory/review views when protected APIs are unavailable; [x] remove the simulated admin role switch; [ ] connect staff/login-audit/export workflows and replace remaining prototype staff actions.
 - [x] Enforce seeded permission keys across existing admin/owner handlers; [ ] decide whether non-admin staff roles may enter the admin surface, then implement staff/role management, audit coverage, event collection, daily aggregation, exports, and privacy-scoped customer operations.
 
 ### Phase 7 — Trust, retention, and advanced selling
@@ -130,21 +132,23 @@ This plan reflects the current source tree. A feature is not considered complete
 - [x] Delivered-order review submission and protected moderation exist.
 - [x] Authenticated wishlist operations exist.
 - [x] Add customer review submission UX with delivered-order validation, moderation messaging, and abuse throttling.
-- [x] Add protected coupon promotion CRUD at `/admin/promotions`, a validated promotion parser, and a public live-offers endpoint/page backed by the existing server-side cart coupon engine.
+- [x] Add protected coupon promotion CRUD at `/admin/promotions`, validated start/end scheduling, truthful active/scheduled/expired admin states, transactional audit records, and a public live-offers endpoint/page backed by the existing server-side cart coupon engine.
 - [ ] Add review-photo attachments, loyalty ledger/rewards, referrals, abandoned-cart recovery, reminders, and wishlist availability synchronization; extend promotions to flash sales, cake/category targeting, and campaign scheduling as business rules are approved.
 
 ### Phase 8 — Media, custom requests, AI, subscriptions, and branches
 
-**Status: Not started / Blocked**
+**Status: Partial / Blocked**
 
 - [ ] Implement verified R2 media flow before accepting inspiration/admin images.
+- [x] Add a text-based custom cake request form with event, guest, budget, theme, and detail fields persisted as sourced contact messages.
+- [ ] Add reference-image media, quotation approval, and admin request workflow after the verified media flow and business quotation policy are approved.
 - [ ] Decide whether custom cake requests, subscriptions, AI recommendations, live chat, SMS, or multi-branch support are launch scope.
 
 ### Phase 9 — Security, performance, SEO, accessibility, marketing, and legal
 
 **Status: Partial**
 
-- [x] Add baseline security response headers/CSP (with development-only `unsafe-eval`), basic in-process rate limiting, and a 1 MiB declared API body-size guard.
+- [x] Add baseline security response headers/CSP (with development-only `unsafe-eval`), basic in-process rate limiting, a same-origin guard for browser mutations, and a 1 MiB declared API body-size guard.
 - [ ] Complete CSRF review, distributed rate limits, Turnstile/WAF, secret management, structured logs, monitoring, and error reporting.
 - [x] Add baseline product metadata and structured data plus a persistent necessary/optional cookie-consent control; [ ] complete image optimization, performance review, keyboard/contrast/screen-reader review, consent copy/legal approval.
 - [ ] Validate all public and admin forms against direct API misuse and oversized/untrusted input.
@@ -154,9 +158,9 @@ This plan reflects the current source tree. A feature is not considered complete
 **Status: Partial**
 
 - [ ] Create migration, staging, CI, deployment, backup, restore, rollback, and incident runbooks.
-- [x] Add focused automated tests for the rate-limit core, catalog query validation, request-size policy, and promotion input validation.
+- [x] Add focused automated tests for the rate-limit core, catalog query validation, request-size/origin policy, promotion input, public custom-request source validation, and account-address validation.
 - [ ] Expand unit, API, integration, and browser coverage proportional to payment, inventory, auth, and admin risk.
-- [ ] Verify a disposable database restore and a complete staging order from checkout through completion.
+- [ ] Verify a disposable database restore and a complete staging order from checkout through completion using `docs/STAGING_SMOKE_TEST_CHECKLIST.md`.
 - [ ] Perform mobile/browser smoke tests and record release evidence before production.
 
 ## Recommended next five implementation slices
@@ -165,7 +169,7 @@ This plan reflects the current source tree. A feature is not considered complete
 2. Implement R2 upload/verification and attach real approved catalog/product media.
 3. Add payment reconciliation/refund boundaries, notification providers, and scheduled reservation expiry.
 4. Complete staff/audit/export workflows after the role-access policy is approved.
-5. Expand focused automated tests and add a staging smoke-test checklist for the server-authoritative commerce paths.
+5. Execute `docs/STAGING_SMOKE_TEST_CHECKLIST.md` against the isolated staging environment after the migration/provider gates are approved.
 
 ## Definition of done
 
