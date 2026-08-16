@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import BrandedSplash from "./BrandedSplash";
-
-const POST_LOAD_DELAY = 2000;
+import { SPLASH_DURATION_MS } from "./splash-timing";
 
 export default function SplashGate({ children }: { children: ReactNode }) {
   const [showSplash, setShowSplash] = useState(true);
@@ -12,7 +11,7 @@ export default function SplashGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     let handoffTimer: number | undefined;
     const handOffToHome = () => {
-      handoffTimer = window.setTimeout(() => setShowSplash(false), POST_LOAD_DELAY);
+      handoffTimer = window.setTimeout(() => setShowSplash(false), SPLASH_DURATION_MS);
     };
 
     if (document.readyState === "complete") {

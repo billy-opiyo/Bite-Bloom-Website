@@ -328,6 +328,20 @@
   --shadow: 0 22px 70px rgba(0, 0, 0, 0.32);
 }
 
+select {
+  color-scheme: light;
+}
+
+select option,
+select optgroup {
+  background-color: var(--paper);
+  color: var(--ink);
+}
+
+[data-theme="dark"] select {
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -374,7 +388,7 @@ img {
 }
 
 .site-shell {
-  overflow: hidden;
+  overflow: clip;
   min-height: 100vh;
 }
 
@@ -517,7 +531,7 @@ img {
 
   .mobile-action-bar-inner {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 4px;
     padding: 8px 6px;
     border: 1px solid var(--line);
@@ -569,7 +583,8 @@ img {
 
   .site-shell,
   .info-page,
-  .account-page {
+  .account-page,
+  .not-found-screen {
     padding-bottom: 102px;
   }
 
@@ -1834,8 +1849,10 @@ h2 {
   flex-direction: column;
   justify-content: flex-end;
   padding: 40px 36px;
-  background: var(--rose);
-  color: #342a2c;
+  border: 1px solid rgba(255, 255, 255, .38);
+  background: rgba(255, 255, 255, .43);
+  color: #2f2829;
+  backdrop-filter: blur(15px);
 }
 
 .promo-side-icon {
@@ -1846,7 +1863,7 @@ h2 {
   place-items: center;
   width: 54px;
   height: 54px;
-  border: 1px solid rgba(52, 42, 44, .33);
+  border: 1px solid rgba(47, 40, 41, .25);
   border-radius: 50%;
   transition: transform .35s cubic-bezier(.2, .7, .2, 1), background .3s ease;
 }
@@ -1857,7 +1874,7 @@ h2 {
 }
 
 .promo-side .eyebrow {
-  color: #694c4a;
+  color: #806b66;
 }
 
 .promo-side h3 {
@@ -1867,13 +1884,13 @@ h2 {
 }
 
 .promo-side h3 em {
-  color: #fff6ed;
+  color: #96706a;
 }
 
 .promo-side p:not(.eyebrow) {
   max-width: 230px;
   margin-bottom: 23px;
-  color: #624a48;
+  color: #665956;
   font-size: 14px;
   line-height: 1.7;
 }
@@ -1881,6 +1898,11 @@ h2 {
 .text-link-light {
   border-color: rgba(52, 42, 44, .35);
   color: #342a2c;
+}
+
+.promo-card:hover .promo-side {
+  background: rgba(255, 255, 255, .55);
+  box-shadow: 0 14px 35px rgba(39, 51, 42, .14);
 }
 
 .text-link-light span {
@@ -4109,6 +4131,20 @@ textarea:focus {
   background: var(--cream);
 }
 
+.account-modal .account-modal-close {
+  top: 12px;
+  right: 12px;
+}
+
+.auth-form-card {
+  position: relative;
+}
+
+.auth-form-card .auth-close-button {
+  top: 12px;
+  right: 12px;
+}
+
 .account-auth,
 .account-dashboard {
   text-align: center;
@@ -4178,6 +4214,10 @@ textarea:focus {
 
 .google-button,
 .guest-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   width: 100%;
   margin-top: 10px;
   padding: 12px;
@@ -4189,8 +4229,47 @@ textarea:focus {
 }
 
 .google-button:hover,
-.guest-button:hover {
+.google-button:focus-visible,
+.guest-button:hover,
+.guest-button:focus-visible {
   border-color: var(--rose);
+  color: var(--rose-dark);
+  outline: 2px solid color-mix(in srgb, var(--rose) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.google-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.auth-google-button {
+  margin-top: 14px;
+}
+
+.account-auth-links {
+  display: grid;
+  gap: 4px;
+  margin-top: 16px;
+}
+
+.account-auth-links p {
+  margin: 0;
+}
+
+.auth-link {
+  color: var(--rose-dark);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--rose-dark) 45%, transparent);
+  text-underline-offset: 3px;
+  transition: color .2s ease, text-decoration-color .2s ease;
+}
+
+.auth-link:hover,
+.auth-link:focus-visible {
+  color: var(--ink);
+  text-decoration-color: var(--ink);
 }
 
 .guest-button {
@@ -4660,7 +4739,8 @@ textarea:focus {
 }
 
 .admin-sidebar-bottom select option {
-  color: #2e2627;
+  background-color: var(--paper);
+  color: var(--ink);
 }
 
 .admin-sidebar-bottom>button,
@@ -7781,9 +7861,10 @@ h3 em {
 }
 
 .splash-brand {
-  font-family: Algerian, "Times New Roman", Times, serif;
-  font-size: clamp(38px, 8vw, 58px);
+  font-family: Pacifico, cursive;
+  font-size: clamp(40px, 8.5vw, 62px);
   font-style: normal;
+  font-weight: 700;
   letter-spacing: -0.03em;
 }
 
@@ -7840,6 +7921,23 @@ h3 em {
   background: var(--cream);
 }
 
+.splash-background {
+  position: absolute !important;
+  z-index: 0 !important;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: .24;
+  pointer-events: none;
+}
+
+.splash-screen > *:not(.splash-background) {
+  position: relative;
+  z-index: 1;
+}
+
 .splash-mark {
   width: 74px;
   height: 74px;
@@ -7852,13 +7950,26 @@ h3 em {
 }
 
 .splash-status {
-  font-size: 13px;
-  letter-spacing: 0.05em;
-  position: absolute;
-  right: 24px;
-  bottom: max(24px, env(safe-area-inset-bottom));
-  left: 24px;
-  margin-top: 0;
+  font-family: Pacifico, cursive;
+  font-size: clamp(15px, 2.4vw, 18px);
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  position: static;
+  width: min(360px, 80vw);
+  margin-top: 12px;
+  text-align: center;
+  text-transform: none;
+}
+
+.splash-status strong,
+.splash-dots {
+  font-family: Pacifico, cursive;
+  font-weight: 700;
+}
+
+.splash-status strong {
+  font-size: 1.05em;
 }
 
 .topline {
@@ -7970,17 +8081,26 @@ textarea {
   color: var(--ink);
 }
 
-.contact-card:hover {
+.promo-side {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.contact-card:hover,
+.promo-card:hover .promo-side {
   background: var(--paper);
   box-shadow: var(--shadow);
 }
 
 .contact-script,
-.contact-card h3 em {
+.contact-card h3 em,
+.promo-side h3 em,
+.promo-side .eyebrow {
   color: var(--rose-dark);
 }
 
-.contact-card > p {
+.contact-card > p,
+.promo-side p:not(.eyebrow) {
   color: var(--muted);
   font-size: 16px;
   line-height: 1.7;

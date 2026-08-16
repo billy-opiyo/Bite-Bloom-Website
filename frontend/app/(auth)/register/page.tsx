@@ -41,7 +41,7 @@ export default function RegisterPage() {
         <label><span>Password</span><input type="password" autoComplete="new-password" required minLength={12} value={password} onChange={(event) => setPassword(event.target.value)} /><small>Use at least 12 characters.</small></label>
         {error && <p role="alert">{error}</p>}
         <button className="button button-dark" type="submit" disabled={isSubmitting}>{isSubmitting ? "Creating account…" : "Create account"}</button>
-        <p>Already have an account? <Link href="/login">Sign in</Link></p>
+        <p>Already have an account? <Link className="auth-link" href="/login">Sign in</Link></p>
       </form>
     </main>
   );
