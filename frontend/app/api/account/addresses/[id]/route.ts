@@ -12,9 +12,9 @@ export const runtime = "nodejs";
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const session = await getAuthenticatedSession();
   if (!session) return apiError("UNAUTHORIZED", "Sign in to update an address.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Addresses are not configured yet.", 503);
   const input = parseAddress(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Check the address details and country code.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Addresses are not configured yet.", 503);
   try {
     const prisma = getPrismaClient();
     const address = await prisma.$transaction(async (tx) => {

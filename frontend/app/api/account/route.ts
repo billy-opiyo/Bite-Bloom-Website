@@ -36,9 +36,9 @@ export async function GET() {
 export async function PATCH(request: NextRequest) {
   const session = await getAuthenticatedSession();
   if (!session) return apiError("UNAUTHORIZED", "Sign in to update your account.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Accounts are not configured yet.", 503);
   const input = parseProfile(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Enter a name and an optional valid phone number.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Accounts are not configured yet.", 503);
   try {
     const user = await getPrismaClient().user.update({ where: { id: session.user.id }, data: input, select: { id: true, name: true, email: true, phone: true } });
     return apiSuccess(user);

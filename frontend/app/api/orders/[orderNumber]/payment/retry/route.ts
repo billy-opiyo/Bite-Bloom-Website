@@ -24,11 +24,11 @@ function emailFrom(value: unknown): string | null {
 export async function POST(request: NextRequest, { params }: { params: { orderNumber: string } }) {
   const rateLimitResponse = enforceRateLimit(request, "payment-retry", 3, 15 * 60 * 1000);
   if (rateLimitResponse) return rateLimitResponse;
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Payments are not configured yet.", 503);
-  if (!hasMpesaConfiguration()) return apiError("CONFIGURATION_ERROR", "M-Pesa payments are not configured yet.", 503);
   const email = emailFrom(await request.json().catch(() => null));
   const orderNumber = params.orderNumber.trim().toUpperCase();
   if (!email || !/^[A-Z0-9-]{4,80}$/.test(orderNumber)) return apiError("VALIDATION_ERROR", "An order number and matching email are required.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Payments are not configured yet.", 503);
+  if (!hasMpesaConfiguration()) return apiError("CONFIGURATION_ERROR", "M-Pesa payments are not configured yet.", 503);
 
   const temporaryReference = `RETRY-${randomUUID()}`;
   try {

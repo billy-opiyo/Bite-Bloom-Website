@@ -40,9 +40,9 @@ function parseUpdate(value: unknown): { status: OrderStatus; reason?: string } |
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const session = await getAdminSession("order:update");
   if (!session) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Orders are not configured yet.", 503);
   const input = parseUpdate(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Invalid order status update.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Orders are not configured yet.", 503);
   try {
     const order = await getPrismaClient().$transaction((tx) => transitionOrder(tx, { orderId: params.id, toStatus: input.status, actorId: session.user.id, reason: input.reason }), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     return apiSuccess({ id: order.id, status: order.status, paymentStatus: order.paymentStatus });

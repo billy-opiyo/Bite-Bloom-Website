@@ -11,8 +11,8 @@ export const runtime = "nodejs";
 export async function DELETE(_: NextRequest, { params }: { params: { cakeId: string } }) {
   const session = await getAuthenticatedSession();
   if (!session) return apiError("UNAUTHORIZED", "Sign in to update your wishlist.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Wishlists are not configured yet.", 503);
   if (!params.cakeId || params.cakeId.length > 128) return apiError("VALIDATION_ERROR", "Invalid cake.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Wishlists are not configured yet.", 503);
   try {
     const prisma = getPrismaClient();
     const wishlist = await prisma.wishlist.findUnique({ where: { userId: session.user.id }, select: { id: true } });

@@ -15,9 +15,9 @@ function parseQuantity(value: unknown): number | null {
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "The cart is not configured yet.", 503);
   const quantity = parseQuantity(await request.json().catch(() => null));
   if (!quantity) return apiError("VALIDATION_ERROR", "Invalid quantity.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "The cart is not configured yet.", 503);
 
   try {
     const { cart, sessionToken } = await getGuestCart(request);

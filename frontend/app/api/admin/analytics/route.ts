@@ -21,14 +21,19 @@ function dayKey(value: Date): string {
 
 export async function GET(request: NextRequest) {
   if (!(await getAdminSession("analytics:read"))) return apiError("UNAUTHORIZED", "Analytics permission is required.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Analytics are not configured yet.", 503);
   const now = new Date();
   const defaultFrom = new Date(now);
   defaultFrom.setDate(defaultFrom.getDate() - 29);
   defaultFrom.setHours(0, 0, 0, 0);
-  const from = parseDate(request.nextUrl.searchParams.get("from"), false) ?? defaultFrom;
-  const to = parseDate(request.nextUrl.searchParams.get("to"), true) ?? now;
+  const rawFrom = request.nextUrl.searchParams.get("from");
+  const rawTo = request.nextUrl.searchParams.get("to");
+  const parsedFrom = parseDate(rawFrom, false);
+  const parsedTo = parseDate(rawTo, true);
+  if ((rawFrom && !parsedFrom) || (rawTo && !parsedTo)) return apiError("VALIDATION_ERROR", "Use valid YYYY-MM-DD analytics dates.", 400);
+  const from = parsedFrom ?? defaultFrom;
+  const to = parsedTo ?? now;
   if (from > to || to.valueOf() - from.valueOf() > 366 * 24 * 60 * 60 * 1000) return apiError("VALIDATION_ERROR", "Choose a date range of up to 366 days.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Analytics are not configured yet.", 503);
 
   try {
     const orders = await getPrismaClient().order.findMany({

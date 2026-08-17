@@ -124,6 +124,7 @@ This plan reflects the current source tree. A feature is not considered complete
 - [x] Protected admin route, catalog CRUD foundation, inventory list/adjustment, customer list/detail, review moderation, shipment, order, and analytics APIs exist.
 - [x] Seeded roles and permissions cover the initial operating roles.
 - [x] Replace overview, delivery, customer directory, and analytics sample metrics with API-backed, empty-safe screens; cake availability toggles, inventory restock, order status, and review moderation now persist through protected APIs.
+- [x] Make the admin cake editor use live active categories, persist new-cake availability, and refresh from server-derived stock/availability after catalog mutations instead of fabricating local stock.
 - [x] Connect the admin customer directory's View action to a protected customer detail page with privacy-scoped profile, order, loyalty, payment, and shipment information.
 - [x] Remove fabricated fallback records from catalog/order/inventory/review views when protected APIs are unavailable; [x] remove the simulated admin role switch; [ ] connect staff/login-audit/export workflows and replace remaining prototype staff actions.
 - [x] Enforce seeded permission keys across existing admin/owner handlers and add protected notification/audit read surfaces; [ ] decide whether non-admin staff roles may enter the admin surface, then complete staff/role management, audit coverage, event collection, daily aggregation, exports, and privacy-scoped customer operations.
@@ -153,6 +154,8 @@ This plan reflects the current source tree. A feature is not considered complete
 **Status: Partial**
 
 - [x] Add baseline security response headers/CSP (with development-only `unsafe-eval`), basic in-process rate limiting, a same-origin guard for browser mutations, a 1 MiB declared API body-size guard, and middleware JSON content-type validation for non-Auth API mutations.
+- [x] Validate mutation bodies and selected path/query parameters before configuration access across cart, checkout, account, wishlist, reviews, registration, payment retry, scheduling, catalog, inventory, order, shipment, promotion, contact-message, analytics, customer, newsletter, and admin-review handlers.
+- [x] Bound the local in-process rate-limit store by pruning expired buckets and evicting the oldest bucket at capacity; [ ] add distributed rate limits before multi-instance production deployment.
 - [ ] Complete CSRF review, distributed rate limits, Turnstile/WAF, secret management, structured logs, monitoring, and error reporting.
 - [x] Add route-level catalog/information metadata, baseline product metadata and structured data plus a persistent necessary/optional cookie-consent control; [ ] complete image optimization, performance review, keyboard/contrast/screen-reader review, consent copy/legal approval.
 - [ ] Validate all public and admin forms against direct API misuse and oversized/untrusted input.

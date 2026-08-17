@@ -48,9 +48,9 @@ export async function GET(_: NextRequest, { params }: { params: { slug: string }
 export async function POST(request: NextRequest, { params }: { params: { slug: string } }) {
   const rateLimitResponse = enforceRateLimit(request, "review-submit", 5, 15 * 60 * 1000);
   if (rateLimitResponse) return rateLimitResponse;
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Reviews are not configured yet.", 503);
   const input = parseReview(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Provide a rating, review, name, and delivered order number.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Reviews are not configured yet.", 503);
 
   try {
     const prisma = getPrismaClient();

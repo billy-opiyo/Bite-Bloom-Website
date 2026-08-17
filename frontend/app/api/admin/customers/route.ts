@@ -15,10 +15,10 @@ function positiveInteger(value: string | null, fallback: number, maximum: number
 
 export async function GET(request: NextRequest) {
   if (!(await getAdminSession("customer:read"))) return apiError("UNAUTHORIZED", "Customer read permission is required.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Customers are not configured yet.", 503);
   const page = positiveInteger(request.nextUrl.searchParams.get("page"), 1, 10_000);
   const pageSize = positiveInteger(request.nextUrl.searchParams.get("pageSize"), 25, 100);
   const query = request.nextUrl.searchParams.get("q")?.trim().slice(0, 120) || undefined;
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Customers are not configured yet.", 503);
 
   try {
     const prisma = getPrismaClient();

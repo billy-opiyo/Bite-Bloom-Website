@@ -11,9 +11,9 @@ export const runtime = "nodejs";
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const session = await getAdminSession("catalog:write");
   if (!session) return apiError("UNAUTHORIZED", "Catalogue write permission is required.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Promotions are not configured yet.", 503);
   const input = await request.json().catch(() => null) as { isActive?: unknown } | null;
   if (typeof input?.isActive !== "boolean") return apiError("VALIDATION_ERROR", "A boolean active value is required.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Promotions are not configured yet.", 503);
   try {
     const coupon = await getPrismaClient().$transaction(async (tx) => {
       const coupon = await tx.coupon.update({ where: { id: params.id }, data: { isActive: input.isActive } });

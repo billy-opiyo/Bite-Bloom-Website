@@ -20,9 +20,9 @@ export const runtime = "nodejs";
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   if (!(await getAdminSession("catalog:write"))) return apiError("UNAUTHORIZED", "Catalogue write permission is required.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "The catalogue is not configured yet.", 503);
   const input = parseUpdate(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Invalid cake update.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "The catalogue is not configured yet.", 503);
 
   try {
     const category = await getPrismaClient().category.findFirst({ where: { id: input.categoryId, isActive: true }, select: { id: true } });

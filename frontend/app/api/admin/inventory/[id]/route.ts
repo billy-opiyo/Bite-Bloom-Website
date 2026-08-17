@@ -25,9 +25,9 @@ function statusFor(quantityOnHand: number, quantityReserved: number, reorderLeve
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const session = await getAdminSession("inventory:adjust");
   if (!session) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Inventory is not configured yet.", 503);
   const input = parseAdjustment(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Provide a non-zero whole-number adjustment and reason.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Inventory is not configured yet.", 503);
   try {
     const item = await getPrismaClient().$transaction(async (tx) => {
       const current = await tx.inventoryItem.findUnique({ where: { id: params.id } });

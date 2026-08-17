@@ -11,9 +11,9 @@ export const runtime = "nodejs";
 export async function GET(_: NextRequest, { params }: { params: { orderNumber: string } }) {
   const session = await getAuthenticatedSession();
   if (!session) return apiError("UNAUTHORIZED", "Sign in to view this order.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Orders are not configured yet.", 503);
   const orderNumber = params.orderNumber.trim().toUpperCase();
   if (!/^[A-Z0-9-]{4,80}$/.test(orderNumber)) return apiError("VALIDATION_ERROR", "Invalid order number.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Orders are not configured yet.", 503);
   try {
     const order = await getPrismaClient().order.findFirst({
       where: { orderNumber, userId: session.user.id },

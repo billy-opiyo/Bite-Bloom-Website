@@ -51,9 +51,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const session = await getAuthenticatedSession();
   if (!session) return apiError("UNAUTHORIZED", "Sign in to save a cake.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Wishlists are not configured yet.", 503);
   const cakeId = cakeIdFrom(await request.json().catch(() => null));
   if (!cakeId) return apiError("VALIDATION_ERROR", "Choose a cake to save.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Wishlists are not configured yet.", 503);
   try {
     const prisma = getPrismaClient();
     const item = await prisma.$transaction(async (tx) => {

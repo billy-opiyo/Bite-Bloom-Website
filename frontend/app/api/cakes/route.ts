@@ -8,13 +8,13 @@ export const runtime = "nodejs";
 
 /** Returns active cake catalogue data without exposing internal inventory or costs. */
 export async function GET(request: Request) {
-  if (!hasDatabaseConfiguration()) {
-    return apiError("CONFIGURATION_ERROR", "The catalogue is not configured yet.", 503);
-  }
-
   const filters = parseCatalogQuery(new URL(request.url).searchParams);
   if (!filters) {
     return apiError("VALIDATION_ERROR", "Invalid catalogue filters.", 400);
+  }
+
+  if (!hasDatabaseConfiguration()) {
+    return apiError("CONFIGURATION_ERROR", "The catalogue is not configured yet.", 503);
   }
 
   try {

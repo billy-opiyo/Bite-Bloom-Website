@@ -44,9 +44,9 @@ function orderNumber(): string {
 }
 
 export async function POST(request: NextRequest) {
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Checkout is not configured yet.", 503);
   const input = parseCheckout(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Check your contact and delivery details.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Checkout is not configured yet.", 503);
   if (input.paymentMethod === "MPESA" && !hasMpesaConfiguration()) return apiError("CONFIGURATION_ERROR", "M-Pesa payments are not configured yet.", 503);
   if (input.paymentMethod === "MPESA" && !normalizeMpesaPhone(input.phone)) return apiError("VALIDATION_ERROR", "Enter a valid Kenyan M-Pesa phone number.", 400);
 

@@ -31,9 +31,9 @@ function parseUpdate(value: unknown): { status?: ShipmentStatus; description?: s
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const session = await getAdminSession("shipment:update");
   if (!session) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Shipments are not configured yet.", 503);
   const input = parseUpdate(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Invalid shipment update.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Shipments are not configured yet.", 503);
   try {
     const shipment = await getPrismaClient().$transaction(async (tx) => {
       const shipment = await tx.shipment.findUnique({ where: { id: params.id }, include: { order: { select: { status: true } } } });

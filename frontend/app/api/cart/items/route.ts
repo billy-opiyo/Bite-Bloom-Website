@@ -21,9 +21,9 @@ function parseCartItem(value: unknown): NewCartItem | null {
 }
 
 export async function POST(request: NextRequest) {
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "The cart is not configured yet.", 503);
   const input = parseCartItem(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Invalid cart item.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "The cart is not configured yet.", 503);
 
   try {
     const { cart, sessionToken } = await getGuestCart(request);

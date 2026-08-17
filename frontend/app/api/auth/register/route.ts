@@ -26,9 +26,9 @@ function parseRegistration(value: unknown): RegistrationInput | null {
 export async function POST(request: NextRequest) {
   const limited = enforceRateLimit(request, "register", 5, 15 * 60 * 1000);
   if (limited) return limited;
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Accounts are not configured yet.", 503);
   const input = parseRegistration(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Enter your name, a valid email, and a password of at least 12 characters.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Accounts are not configured yet.", 503);
 
   try {
     const prisma = getPrismaClient();

@@ -11,9 +11,9 @@ export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
   if (!(await getAdminSession("customer:read"))) return apiError("UNAUTHORIZED", "Customer read permission is required.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Contact messages are not configured yet.", 503);
   const status = request.nextUrl.searchParams.get("status");
   if (status && !Object.values(ContactMessageStatus).includes(status as ContactMessageStatus)) return apiError("VALIDATION_ERROR", "Choose a valid contact message status.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Contact messages are not configured yet.", 503);
   try {
     const messages = await getPrismaClient().contactMessage.findMany({
       where: status ? { status: status as ContactMessageStatus } : undefined,

@@ -16,9 +16,9 @@ function couponCode(value: unknown): string | null {
 }
 
 export async function POST(request: NextRequest) {
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Coupons are not configured yet.", 503);
   const code = couponCode(await request.json().catch(() => null));
   if (!code) return apiError("VALIDATION_ERROR", "Enter a valid coupon code.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Coupons are not configured yet.", 503);
   try {
     const { cart, sessionToken } = await getGuestCart(request);
     const prisma = getPrismaClient();

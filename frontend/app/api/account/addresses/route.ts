@@ -24,9 +24,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const session = await getAuthenticatedSession();
   if (!session) return apiError("UNAUTHORIZED", "Sign in to save an address.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Addresses are not configured yet.", 503);
   const input = parseAddress(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Check the address details and country code.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Addresses are not configured yet.", 503);
   try {
     const address = await getPrismaClient().$transaction(async (tx) => {
       const count = await tx.address.count({ where: { userId: session.user.id } });

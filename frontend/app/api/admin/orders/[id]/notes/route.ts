@@ -37,9 +37,9 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const session = await getAdminSession("order:update");
   if (!session) return apiError("UNAUTHORIZED", "Administrator access is required.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Orders are not configured yet.", 503);
   const input = parseNote(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "A note must be between 1 and 2,000 characters.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Orders are not configured yet.", 503);
   try {
     const prisma = getPrismaClient();
     const note = await prisma.$transaction(async (tx) => {

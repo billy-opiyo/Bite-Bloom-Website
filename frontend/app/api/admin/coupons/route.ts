@@ -24,9 +24,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const session = await getAdminSession("catalog:write");
   if (!session) return apiError("UNAUTHORIZED", "Catalogue write permission is required.", 401);
-  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Promotions are not configured yet.", 503);
   const input = parsePromotionInput(await request.json().catch(() => null));
   if (!input) return apiError("VALIDATION_ERROR", "Check the promotion code, value, dates, and limits.", 400);
+  if (!hasDatabaseConfiguration()) return apiError("CONFIGURATION_ERROR", "Promotions are not configured yet.", 503);
   try {
     const coupon = await getPrismaClient().$transaction(async (tx) => {
       const coupon = await tx.coupon.create({ data: { code: input.code, ...(input.description ? { description: input.description } : {}), discountType: input.discountType as DiscountType, value: input.value, minimumOrder: input.minimumOrder, maximumDiscount: input.maximumDiscount, usageLimit: input.usageLimit, perUserLimit: input.perUserLimit, startsAt: input.startsAt, endsAt: input.endsAt, isActive: input.isActive } });
