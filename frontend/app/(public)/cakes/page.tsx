@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import CakeCard from "../../../components/cakes/CakeCard";
@@ -11,7 +11,7 @@ import CakeSort, { type CakeSortValue } from "../../../components/cakes/CakeSort
 import PublicFloatingActions from "../../../components/layout/PublicFloatingActions";
 import type { CatalogCake, CatalogCategory } from "../../../types/cake";
 
-type ApiResponse = { data?: { items: CatalogCake[]; hasMore: boolean; page: number; pageSize: number; total: number }; error?: { message?: string } };
+type ApiResponse = { data?: { items: CatalogCake[]; categories: CatalogCategory[]; hasMore: boolean; page: number; pageSize: number; total: number }; error?: { message?: string } };
 
 export default function CakesPage() {
   const searchParams = useSearchParams();
@@ -23,56 +23,70 @@ export default function CakesPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [availableCategories, setAvailableCategories] = useState<CatalogCategory[]>([]);
   const [error, setError] = useState("");
+  const requestGeneration = useRef(0);
+
+  const catalogUrl = useMemo(() => (nextPage: number) => {
+    const params = new URLSearchParams({ page: String(nextPage), pageSize: "48", sort });
+    if (search.trim()) params.set("q", search.trim());
+    if (category !== "all") params.set("category", category);
+    return `/api/cakes?${params.toString()}`;
+  }, [category, search, sort]);
 
   useEffect(() => {
+    const generation = requestGeneration.current + 1;
+    requestGeneration.current = generation;
     const controller = new AbortController();
     async function loadCakes() {
+      setLoading(true);
+      setLoadingMore(false);
+      setPage(1);
+      setCakes([]);
+      setHasMore(false);
+      setError("");
       try {
-        const response = await fetch("/api/cakes?page=1&pageSize=48", { signal: controller.signal });
+        const response = await fetch(catalogUrl(1), { signal: controller.signal });
         const payload = await response.json() as ApiResponse;
         if (!response.ok || !payload.data) throw new Error(payload.error?.message || "The catalogue is unavailable.");
+        if (generation !== requestGeneration.current) return;
         setCakes(payload.data.items);
+        setAvailableCategories(payload.data.categories);
         setHasMore(payload.data.hasMore);
       } catch (cause) {
-        if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "The catalogue is unavailable.");
+        if (!controller.signal.aborted && generation === requestGeneration.current) setError(cause instanceof Error ? cause.message : "The catalogue is unavailable.");
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted && generation === requestGeneration.current) setLoading(false);
       }
     }
     void loadCakes();
     return () => controller.abort();
-  }, []);
+  }, [catalogUrl]);
 
   async function loadMore() {
-    if (loadingMore || !hasMore) return;
+    if (loading || loadingMore || !hasMore) return;
+    const generation = requestGeneration.current;
     setLoadingMore(true);
     try {
       const nextPage = page + 1;
-      const response = await fetch(`/api/cakes?page=${nextPage}&pageSize=48`);
+      const response = await fetch(catalogUrl(nextPage));
       const payload = await response.json() as ApiResponse;
       if (!response.ok || !payload.data) throw new Error(payload.error?.message || "More cakes are unavailable.");
+      if (generation !== requestGeneration.current) return;
       setCakes((current) => [...current, ...payload.data!.items]);
+      setAvailableCategories(payload.data.categories);
       setPage(nextPage);
       setHasMore(payload.data.hasMore);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "More cakes are unavailable.");
+      if (generation === requestGeneration.current) setError(cause instanceof Error ? cause.message : "More cakes are unavailable.");
     } finally {
-      setLoadingMore(false);
+      if (generation === requestGeneration.current) setLoadingMore(false);
     }
   }
 
-  const categories = useMemo<CatalogCategory[]>(() => {
-    const unique = new Map<string, CatalogCategory>();
-    cakes.flatMap((cake) => cake.categories).forEach((item) => unique.set(item.slug, item));
-    return Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [cakes]);
+  const categories = useMemo(() => availableCategories, [availableCategories]);
 
-  const visibleCakes = useMemo(() => cakes.filter((cake) => {
-    const query = search.trim().toLowerCase();
-    const matchesSearch = !query || [cake.name, cake.description, ...cake.categories.map((item) => item.name)].some((value) => value?.toLowerCase().includes(query));
-    return matchesSearch && (category === "all" || cake.categories.some((item) => item.slug === category));
-  }).sort((a, b) => sort === "price-low" ? a.price - b.price : sort === "price-high" ? b.price - a.price : sort === "name" ? a.name.localeCompare(b.name) : Number(b.isFeatured) - Number(a.isFeatured)), [cakes, category, search, sort]);
+  const visibleCakes = useMemo(() => cakes, [cakes]);
 
   return (
     <main className="catalog-page">

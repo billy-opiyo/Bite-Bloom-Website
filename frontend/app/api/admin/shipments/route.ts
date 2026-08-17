@@ -14,7 +14,7 @@ export async function GET() {
       include: { order: { select: { orderNumber: true, email: true, status: true, fulfillmentType: true } }, events: { orderBy: { occurredAt: "desc" }, take: 10 } },
       orderBy: { updatedAt: "desc" }, take: 100,
     });
-    return apiSuccess(shipments.map((shipment) => ({ id: shipment.id, orderId: shipment.orderId, orderNumber: shipment.order.orderNumber, customer: shipment.order.email, orderStatus: shipment.order.status, fulfillmentType: shipment.order.fulfillmentType, status: shipment.status, courier: shipment.courier, trackingNumber: shipment.trackingNumber, estimatedAt: shipment.estimatedAt, events: shipment.events.map((event) => ({ status: event.status, description: event.description, occurredAt: event.occurredAt })) })));
+    return apiSuccess(shipments.map((shipment) => ({ id: shipment.id, orderId: shipment.orderId, orderNumber: shipment.order.orderNumber, customer: shipment.order.email, orderStatus: shipment.order.status, fulfillmentType: shipment.order.fulfillmentType, status: shipment.status, courier: shipment.courier, trackingNumber: shipment.trackingNumber, estimatedAt: shipment.estimatedAt, dispatchedAt: shipment.dispatchedAt, deliveredAt: shipment.deliveredAt, events: shipment.events.map((event) => ({ status: event.status, description: event.description, occurredAt: event.occurredAt })) })));
   } catch {
     return apiError("DATABASE_UNAVAILABLE", "Shipments are temporarily unavailable.", 503);
   }

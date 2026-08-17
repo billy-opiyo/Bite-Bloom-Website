@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+
+import AccountSectionNav from "../../components/account/AccountSectionNav";
 
 export const metadata: Metadata = {
   title: "Your Bite & Bloom account",
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function AccountLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <><nav className="account-section-nav" aria-label="Account sections"><Link href="/account">Overview</Link><Link href="/account/wishlist">Wishlist</Link><Link href="/account/loyalty">Loyalty points</Link></nav>{children}</>;
+  return <><AccountSectionNav />{children}</>;
 }

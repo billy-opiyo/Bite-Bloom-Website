@@ -65,6 +65,7 @@ This plan reflects the current source tree. A feature is not considered complete
 - [x] Add homepage dialog focus management: initial focus, Tab containment, Escape close, and focus restoration for cart, checkout, account, and product overlays.
 - [ ] Remove remaining page-local sample data and connect every visible metric/action to a source of truth; the homepage tracking preview control has been replaced with server-refreshed status and a real tracking route.
 - [x] Make homepage catalog hydration consume the paginated `/api/cakes` envelope, active customization definitions, live images/metadata, and server variant prices; static records remain limited to unconfigured/offline preview or missing hero/promo visuals.
+- [x] Connect the public catalogue search, category, and sort controls to server-side filters and preserve the active category set while loading additional pages.
 - [x] Derive homepage category filters from live catalog categories and keep static cakes limited to visual hero/promo fallback when a configured catalog has fewer visual items.
 - [x] Add global reduced-motion handling and visible keyboard focus rings; [x] announce catalog/product loading and error states, suppress failed product thumbnails, use named homepage contact fields, and fall back across failed catalog-card images; [ ] complete accessibility review, mobile breakpoints, focus management, and image alt review.
 - [ ] Replace placeholder business copy/contact/social/map values with approved configuration.
@@ -104,6 +105,7 @@ This plan reflects the current source tree. A feature is not considered complete
 **Status: Partial**
 
 - [x] Credentials login, registration, JWT session, verification/reset/resend route foundations, account profile, address create/edit/delete/default management, orders, and wishlist exist.
+- [x] Add a real sign-out action to the shared authenticated account navigation.
 - [x] Customer ownership is checked in account/order resources.
 - [x] Require the single-use verification token before password-account activation; [ ] configure secure email delivery and complete delivery/failure handling.
 - [x] Add conditional Google OAuth provider/button wiring; [ ] configure approved credentials and verify the live callback.
@@ -120,8 +122,11 @@ This plan reflects the current source tree. A feature is not considered complete
 
 - [x] Server order state machine, status history, customer tracking with automatic public-page refresh, admin order updates/notes, shipment records/events, and inventory consumption/release foundations exist.
 - [x] Rehydrate protected admin order and shipment feeds after status or courier mutations so server-normalized state replaces local optimistic drift.
-- [ ] Connect admin order/delivery screens to APIs and add proof of delivery, courier/ETA integration, pickup readiness, cancellation, exports, and refunds.
+- [x] Connect admin order/delivery screens to protected APIs for status, shipment assignment, receipts, and operational export; [ ] add proof of delivery, courier/ETA integration, pickup readiness, cancellation, and refunds.
+- [x] Add a privacy-conscious CSV export for the currently loaded protected admin order feed; customer exports remain gated on an approved privacy workflow.
 - [x] Connect the admin courier field to validated shipment assignment without fabricated driver identities; [ ] add driver identity management and richer dispatch workflows.
+- [x] Persist shipment dispatch/delivery timestamps and expose them with the protected shipment feed; proof-of-delivery evidence remains gated on the approved workflow/media policy.
+- [x] Distinguish shipment workflow conflicts from unexpected database failures so admin mutations return truthful 409 versus 503 responses.
 - [x] Add protected admin order detail retrieval and a print-ready receipt route for the existing order action.
 - [ ] Configure and schedule reservation expiry; add status notifications with retry/deduplication.
 
@@ -132,9 +137,11 @@ This plan reflects the current source tree. A feature is not considered complete
 - [x] Protected admin route, catalog CRUD foundation, inventory list/adjustment, customer list/detail, review moderation, shipment, order, and analytics APIs exist.
 - [x] Seeded roles and permissions cover the initial operating roles.
 - [x] Replace overview, delivery, customer directory, and analytics sample metrics with API-backed, empty-safe screens; cake availability toggles, inventory restock, order status, and review moderation now persist through protected APIs.
+- [x] Make the admin low-stock review control filter the protected inventory feed instead of displaying a no-op notification.
 - [x] Make the admin cake editor use live active categories, persist new-cake availability, and refresh from server-derived stock/availability after catalog mutations instead of fabricating local stock.
 - [x] Connect the admin customer directory's View action to a protected customer detail page with privacy-scoped profile, order, loyalty, payment, and shipment information.
 - [x] Remove fabricated fallback records from catalog/order/inventory/review views when protected APIs are unavailable; [x] remove the simulated admin role switch; [ ] connect staff/login-audit/export workflows and replace remaining prototype staff actions.
+- [x] Add a protected read-only role/permission matrix to the staff view without exposing staff identities or enabling unapproved invitations/role changes.
 - [x] Enforce seeded permission keys across existing admin/owner handlers and add protected notification/audit read surfaces; [ ] decide whether non-admin staff roles may enter the admin surface, then complete staff/role management, audit coverage, event collection, daily aggregation, exports, and privacy-scoped customer operations.
 
 ### Phase 7 — Trust, retention, and advanced selling
@@ -173,7 +180,7 @@ This plan reflects the current source tree. A feature is not considered complete
 **Status: Partial**
 
 - [x] Create the source-level migration, staging, deployment, backup, restore, rollback, and incident runbook at `docs/deployment/RELEASE_AND_DATABASE_RUNBOOK.md` and add the placeholder-only quality workflow at `.github/workflows/quality.yml`; [ ] verify CI execution and execute the environment runbook against approved environments.
-- [x] Add focused automated tests for the rate-limit core, catalog query validation, request-size/origin policy, promotion input, public custom-request source validation, account-address validation, notification recipient redaction, admin cake input, M-Pesa callback parsing, payment metadata merging, and migration-baseline integrity.
+- [x] Add focused automated tests for the rate-limit core, catalog query validation, request-size/origin policy, promotion input, public custom-request source validation, account-address validation, notification recipient redaction, admin cake input, admin order export, M-Pesa callback parsing, payment metadata merging, and migration-baseline integrity.
 - [x] Verify a clean isolated `next build frontend` with process-only local placeholders; disable the Windows Webpack build worker and support `NEXT_DIST_DIR=.next-build` so concurrent Turbo development output cannot corrupt production verification.
 - [ ] Expand unit, API, integration, and browser coverage proportional to payment, inventory, auth, and admin risk.
 - [ ] Verify a disposable database restore and a complete staging order from checkout through completion using `docs/STAGING_SMOKE_TEST_CHECKLIST.md`.

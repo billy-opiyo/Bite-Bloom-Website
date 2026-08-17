@@ -30,13 +30,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const shipment = await getPrismaClient().$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: params.id }, select: { id: true, status: true, shipment: true } });
       if (!order || order.status !== "READY_FOR_DISPATCH" || order.shipment) throw new Error("SHIPMENT_NOT_ALLOWED");
-      const shipment = await tx.shipment.create({ data: { orderId: order.id, status: "DISPATCHED", ...input } });
+      const shipment = await tx.shipment.create({ data: { orderId: order.id, status: "DISPATCHED", dispatchedAt: new Date(), ...input } });
       await tx.shipmentEvent.create({ data: { shipmentId: shipment.id, status: "DISPATCHED", description: `Dispatched with ${input.courier}` } });
       await transitionOrder(tx, { orderId: order.id, toStatus: "OUT_FOR_DELIVERY", actorId: session.user.id, reason: "Shipment dispatched" });
       return shipment;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     return apiSuccess({ id: shipment.id, status: shipment.status, courier: shipment.courier }, { status: 201 });
-  } catch {
-    return apiError("VALIDATION_ERROR", "This order cannot be dispatched yet or already has a shipment.", 409);
+  } catch (error) {
+    if (error instanceof Error && error.message === "SHIPMENT_NOT_ALLOWED") return apiError("VALIDATION_ERROR", "This order cannot be dispatched yet or already has a shipment.", 409);
+    return apiError("DATABASE_UNAVAILABLE", "Unable to create the shipment right now.", 503);
   }
 }

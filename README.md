@@ -13,13 +13,16 @@ The repository currently contains:
 - A responsive branded storefront with home, catalog, category, product, cart, checkout, tracking, contact, FAQ, offers, about, privacy, terms, and cookies pages.
 - A structured `/custom-cake` request form for event, guest count, budget, theme, and design details; image attachments remain disabled until verified media storage is configured.
 - Catalog data loaded from Prisma through public cake list/detail/review APIs. Active variants expose availability as `quantityOnHand - quantityReserved`.
+- The public catalogue sends search, category, and sort selections to the server and preserves active categories across paginated results; stale page responses cannot overwrite a newer filter state.
 - Guest cart persistence through the HTTP-only `bite_bloom_cart` cookie, server-side price/customization validation, coupon application/removal, delivery scheduling, and inventory reservations.
 - Signed-in customers can save a cake from the cart for later through the server-backed wishlist.
 - Checkout for delivery or pickup, future dates within the server validation window, fixed delivery slots, M-Pesa STK Push when Daraja is configured, and cash-on-delivery confirmation through WhatsApp.
 - Auth.js credentials login, conditional Google provider wiring, customer registration, email verification/resend and password-reset routes, JWT sessions, protected account pages, saved addresses, customer orders, and wishlist operations.
+- The shared authenticated account navigation includes a real NextAuth sign-out action that returns to the storefront.
 - Protected account navigation includes a read-only loyalty balance/history view backed by persisted loyalty transactions; points earning and redemption rules remain pending business approval.
 - Customer order tracking, payment retry for an eligible pending M-Pesa order, a server-enforced order state machine, shipment records/events, inventory adjustment, and expired-reservation release APIs.
 - Protected admin APIs for catalog, orders, order notes, shipments, inventory, customers, customer detail, reviews, date-range analytics, contact messages, newsletter records, coupon promotions, and redacted notification status. The public `/unsubscribe` page/API accepts newsletter opt-out requests without revealing whether an address exists. The customer directory opens a protected detail view with order, loyalty, payment, and shipment data. Promotion creation/status changes also write transactional audit records. The admin pages are protected by middleware for `admin` and `owner` roles, and those handlers enforce their seeded permission keys.
+- The protected admin order feed can export the current operational view as a formula-safe CSV without customer contact fields; the inventory low-stock control filters the protected feed rather than simulating a result.
 - Seed data for roles, permissions, an optional owner account, three cakes with size variants and inventory, and the `SWEET10` coupon.
 - Durable Prisma models for commerce, payments, reservations, reviews, wishlist, loyalty, media, notifications, contact/newsletter records, analytics, and audit logs.
 
@@ -31,7 +34,7 @@ The current implementation still needs production hardening and UI integration i
 - The admin page uses protected APIs for catalog, orders, delivery, customers, analytics, inventory, reviews, and communication; the staff section remains an explicitly unconfigured prototype pending the role-access decision.
 - Product and admin image surfaces use placeholders and explicitly identify media uploads as unavailable; no filename-only upload is presented as saved. Cloudflare R2 upload sessions and verified media attachment are not implemented in the current route tree.
 - M-Pesa requires real Daraja credentials and a public HTTPS callback URL. Resend, WhatsApp Cloud, R2, Turnstile/WAF, monitoring, and scheduled-job hosting are not configured in this repository.
-- Focused automated tests cover rate limiting, authentication input parsing, catalog query validation, request-size/content-type/origin policy, promotion input, public custom-request source validation, account-address validation, and notification recipient redaction; API/browser, backup-restore, staging, CI, and deployment verification remain outstanding.
+- Focused automated tests cover rate limiting, authentication input parsing, catalog query validation, request-size/content-type/origin policy, promotion input, public custom-request source validation, account-address validation, notification recipient redaction, admin order export, M-Pesa callback parsing, payment metadata merging, and migration-baseline integrity; API/browser, backup-restore, staging, CI, and deployment verification remain outstanding.
 - Business decisions still need confirmation for delivery areas/fees, pickup rules, cancellation/refunds, notifications, retention, and the final catalog.
 
 Treat these limitations as explicit release blockers rather than simulated functionality.
@@ -129,7 +132,7 @@ Public routes include `/api/health`, `/api/cakes` (validated `page`, `pageSize`,
 
 Authenticated customer routes include `/api/account`, `/api/account/addresses`, `/api/account/cart/merge`, `/api/account/orders`, `/api/account/orders/[orderNumber]`, `/api/account/orders/[orderNumber]/cancel`, `/api/account/wishlist`, and the authenticated order/payment retry paths.
 
-Admin routes include `/api/admin/cakes`, `/api/admin/orders`, `/api/admin/orders/[id]` (protected detail/status), `/api/admin/orders/[id]/notes`, `/api/admin/orders/[id]/shipment`, `/api/admin/shipments` (including validated courier assignment), `/api/admin/inventory`, `/api/admin/customers`, `/api/admin/reviews`, `/api/admin/analytics`, `/api/admin/contact-messages`, `/api/admin/newsletter`, and `/api/admin/coupons`.
+Admin routes include `/api/admin/cakes`, `/api/admin/orders`, `/api/admin/orders/[id]` (protected detail/status), `/api/admin/orders/[id]/notes`, `/api/admin/orders/[id]/shipment`, `/api/admin/shipments` (including validated courier assignment), `/api/admin/inventory`, `/api/admin/customers`, `/api/admin/reviews`, `/api/admin/analytics`, `/api/admin/contact-messages`, `/api/admin/newsletter`, `/api/admin/coupons`, and the protected read-only `/api/admin/roles` permission matrix.
 
 Auth and operational routes include `/api/auth/*`, `/api/payments/mpesa/callback`, and `/api/jobs/expire-reservations`.
 

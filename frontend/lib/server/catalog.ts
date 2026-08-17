@@ -68,7 +68,7 @@ export type CatalogListOptions = {
   sort?: "featured" | "name" | "price-low" | "price-high";
 };
 
-export type CatalogPage = { items: CatalogCake[]; page: number; pageSize: number; total: number; hasMore: boolean };
+export type CatalogPage = { items: CatalogCake[]; categories: Array<{ name: string; slug: string }>; page: number; pageSize: number; total: number; hasMore: boolean };
 
 function serializeCake(cake: PublishedCake): CatalogCake {
   const mediaBaseUrl = (process.env.NEXT_PUBLIC_MEDIA_BASE_URL || process.env.R2_PUBLIC_URL || "").replace(/\/$/, "");
@@ -115,7 +115,7 @@ export async function listPublishedCakesPage(options: CatalogListOptions = {}): 
   const where: Prisma.CakeWhereInput = {
     status: "ACTIVE",
     ...(options.category ? { categories: { some: { category: { slug: options.category } } } } : {}),
-    ...(query ? { OR: [{ name: { contains: query, mode: "insensitive" } }, { slug: { contains: query, mode: "insensitive" } }, { shortDescription: { contains: query, mode: "insensitive" } }] } : {}),
+    ...(query ? { OR: [{ name: { contains: query, mode: "insensitive" } }, { slug: { contains: query, mode: "insensitive" } }, { shortDescription: { contains: query, mode: "insensitive" } }, { categories: { some: { category: { name: { contains: query, mode: "insensitive" } } } } }] } : {}),
   };
   const orderBy: Prisma.CakeOrderByWithRelationInput[] = options.sort === "name"
     ? [{ name: "asc" }]
@@ -124,11 +124,12 @@ export async function listPublishedCakesPage(options: CatalogListOptions = {}): 
       : options.sort === "price-high"
         ? [{ basePrice: "desc" }, { name: "asc" }]
         : [{ isFeatured: "desc" }, { createdAt: "desc" }];
-  const [total, cakes] = await Promise.all([
+  const [total, cakes, categories] = await Promise.all([
     getPrismaClient().cake.count({ where }),
     getPrismaClient().cake.findMany({ where, include: publishedCakeInclude, orderBy, skip: (page - 1) * pageSize, take: pageSize }),
+    getPrismaClient().category.findMany({ where: { isActive: true }, select: { name: true, slug: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
   ]);
-  return { items: cakes.map(serializeCake), page, pageSize, total, hasMore: page * pageSize < total };
+  return { items: cakes.map(serializeCake), categories, page, pageSize, total, hasMore: page * pageSize < total };
 }
 
 export async function getPublishedCake(slug: string): Promise<CatalogCakeDetail | null> {

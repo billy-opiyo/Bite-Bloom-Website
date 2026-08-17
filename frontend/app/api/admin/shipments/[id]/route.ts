@@ -42,10 +42,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         if (shipment.order.status !== "OUT_FOR_DELIVERY") throw new Error("INVALID_DELIVERY");
         await transitionOrder(tx, { orderId: shipment.orderId, toStatus: "DELIVERED", actorId: session.user.id, reason: input.description ?? "Delivery confirmed" });
       }
-      return tx.shipment.update({ where: { id: shipment.id }, data: { ...(input.status ? { status: input.status } : {}), ...(input.courier !== undefined ? { courier: input.courier } : {}), ...(input.trackingNumber !== undefined ? { trackingNumber: input.trackingNumber } : {}), ...(input.estimatedAt !== undefined ? { estimatedAt: input.estimatedAt } : {}), ...(input.status === "DELIVERED" ? { deliveredAt: new Date() } : {}), ...(input.status ? { events: { create: { status: input.status, description: input.description } } } : {}) } });
+      const dispatchTimestamp = input.status && ["DISPATCHED", "IN_TRANSIT"].includes(input.status) && !shipment.dispatchedAt ? new Date() : undefined;
+      return tx.shipment.update({ where: { id: shipment.id }, data: { ...(input.status ? { status: input.status } : {}), ...(input.courier !== undefined ? { courier: input.courier } : {}), ...(input.trackingNumber !== undefined ? { trackingNumber: input.trackingNumber } : {}), ...(input.estimatedAt !== undefined ? { estimatedAt: input.estimatedAt } : {}), ...(dispatchTimestamp ? { dispatchedAt: dispatchTimestamp } : {}), ...(input.status === "DELIVERED" ? { deliveredAt: new Date() } : {}), ...(input.status ? { events: { create: { status: input.status, description: input.description } } } : {}) } });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     return apiSuccess({ id: shipment.id, status: shipment.status });
-  } catch {
-    return apiError("VALIDATION_ERROR", "This shipment update is not allowed.", 409);
+  } catch (error) {
+    if (error instanceof Error && ["SHIPMENT_NOT_FOUND", "INVALID_DELIVERY", "INVALID_TRANSITION"].includes(error.message)) return apiError("VALIDATION_ERROR", "This shipment update is not allowed.", 409);
+    return apiError("DATABASE_UNAVAILABLE", "Unable to update the shipment right now.", 503);
   }
 }

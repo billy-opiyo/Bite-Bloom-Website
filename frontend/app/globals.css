@@ -6359,6 +6359,44 @@ textarea:focus {
   font-size: 9px;
 }
 
+.staff-permission-list {
+  display: grid;
+  gap: 10px;
+}
+
+.staff-permission-row {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.staff-permission-row>div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.staff-permission-row strong,
+.staff-permission-row small {
+  display: block;
+}
+
+.staff-permission-row strong {
+  font-size: 10px;
+}
+
+.staff-permission-row small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.staff-permission-row p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.5;
+}
+
 .permission-list {
   display: flex;
   flex-direction: column;
@@ -8535,6 +8573,20 @@ html::-webkit-scrollbar-thumb:hover {
 
 .account-section-nav a:hover,
 .account-section-nav a:focus-visible {
+  color: var(--ink);
+}
+
+.account-signout {
+  border: 0;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.account-signout:hover,
+.account-signout:focus-visible {
   color: var(--ink);
 }
 
