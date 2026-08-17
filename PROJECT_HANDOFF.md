@@ -1,6 +1,6 @@
 # Bite & Bloom — Current Project Handoff
 
-**Last reviewed:** 16 August 2026
+**Last reviewed:** 17 August 2026
 **Repository state:** active MVP implementation; production launch is still blocked by migrations, provider setup, testing, and incomplete admin UI integration.
 
 ## Executive summary
@@ -9,11 +9,19 @@ The repository has moved beyond the original browser-only prototype. The live ar
 
 The customer journey is substantially implemented: catalog data, product detail, cart, coupon, checkout, inventory reservation, order creation, M-Pesa/COD payment foundations, account resources, tracking, reviews, contact, and newsletter records have server routes. Authentication and coarse admin protection are also present.
 
-The remaining work is primarily integration and release hardening. Admin catalog, orders, delivery, customer directory, analytics, inventory, reviews, and communication views now consume protected APIs with explicit empty states; the staff view remains a clearly labeled prototype pending the role-access decision, the admin UI no longer simulates role switching, media upload is not connected to R2, external providers are not configured, the database has no migration history, and staging execution/release verification is absent. The source-aligned staging checklist is [STAGING_SMOKE_TEST_CHECKLIST.md](docs/STAGING_SMOKE_TEST_CHECKLIST.md).
+The remaining work is primarily integration and release hardening. Admin catalog, orders, delivery, customer directory, analytics, inventory, reviews, and communication views now consume protected APIs with explicit empty states; the staff view remains a clearly labeled prototype pending the role-access decision, the admin UI no longer simulates role switching, media upload is not connected to R2, external providers are not configured, the initial migration baseline is generated but unapplied, and staging execution/release verification is absent. The source-aligned staging checklist is [STAGING_SMOKE_TEST_CHECKLIST.md](docs/STAGING_SMOKE_TEST_CHECKLIST.md).
 
 The homepage post-checkout status display refreshes from the protected order-tracking endpoint; its local “Preview next update” prototype action was removed in favor of the real `/tracking` route.
 
+When the catalog API is available, homepage category filters now derive from live category names and stale category selections reset safely. Static cakes remain only as visual hero/promo fallbacks when a configured catalog has fewer than four visual items; they are not added to the live collection listing.
+
 The public `/tracking` result now refreshes its server status automatically every 30 seconds while the page is open.
+
+Checkout success now links guests to `/tracking` with the order number and checkout email, and the tracking form hydrates and loads those values automatically.
+
+The branded splash now advances one percentage point per interval across its configured four-second duration instead of reaching 100% halfway through, and its status text is announced politely to assistive technology.
+
+Production verification supports `NEXT_DIST_DIR` (default `.next`); isolated local/CI builds use `.next-build` so a Turbo development server cannot corrupt production output in the shared directory.
 
 ## Implemented surface
 
@@ -62,11 +70,13 @@ The public layout includes the branded navigation/footer, responsive actions, th
 - Checkout accepts a client-generated idempotency key, returns the existing order for repeated submissions, and recovers a concurrent unique-key race when the first order wins.
 - Reservation availability is `quantityOnHand - quantityReserved`.
 - M-Pesa Daraja STK Push, idempotent callback handling, and guarded payment retry are implemented behind environment configuration.
+- M-Pesa callbacks now pass through a bounded structural parser before reconciliation; malformed or oversized callback data is acknowledged without touching payment/order transactions.
+- Payment metadata is merged rather than replaced during initial STK setup, retry locking/failure, and callback reconciliation, preserving the payment method and provider evidence across attempts.
 - Cash on delivery creates a pending cash payment, confirms the order path, and opens a prefilled WhatsApp confirmation link.
 - The order transition service consumes reservations when production starts, releases them for cancellation/failure, and settles pending cash payment at delivery.
 - Authenticated customers can cancel unpaid `PENDING_PAYMENT` or `CONFIRMED` orders; paid orders intentionally require support review because refund processing is not connected.
 - The reservation expiry job is protected by `CRON_SECRET` and releases active expired reservations in bounded batches.
-- Payment query/reconciliation, refunds, checkout idempotency, service-area/fee rules, and scheduled-job hosting are still required. Slot capacity is server-enforced through `/api/checkout/slots` and checkout validation, and checkout now disables full slots when live availability is returned.
+- Payment query/reconciliation, refunds, checkout idempotency, service-area/fee rules, and scheduled-job hosting are still required. Slot capacity is server-enforced through `/api/checkout/slots` and checkout validation; checkout now renders only server-derived slots, disables full slots, and blocks submission while live availability is unavailable.
 
 ### Orders, tracking, reviews, and operations
 
@@ -88,7 +98,7 @@ The public layout includes the branded navigation/footer, responsive actions, th
 
 ## Admin status
 
-`frontend/app/admin/page.tsx`, `/admin/messages`, `/admin/notifications`, `/admin/audit`, and `/admin/customers/[email]` are protected by `frontend/middleware.ts`. A shared admin utility navigation exposes messages, promotions, notifications, and audit trail routes from the admin shell. Catalog, review, inventory, order status, overview metrics, delivery shipment summaries, customer aggregates/detail, analytics, notification metadata, audit metadata, and persisted communication records now connect to protected APIs. The admin cake editor uses the live active category list, persists new-cake availability, and refreshes server-derived stock/availability after mutations rather than inventing local stock values. Existing admin APIs enforce their seeded permission keys after the admin/owner role check; staff management, login-audit telemetry, exports, and some fallback state remain incomplete.
+`frontend/app/admin/page.tsx`, `/admin/messages`, `/admin/notifications`, `/admin/audit`, and `/admin/customers/[email]` are protected by `frontend/middleware.ts`. A shared admin utility navigation exposes messages, promotions, notifications, and audit trail routes from the admin shell. Catalog, review, inventory, order status, overview metrics, delivery shipment summaries, customer aggregates/detail, analytics, notification metadata, audit metadata, and persisted communication records now connect to protected APIs. The admin cake editor uses the live active category list, persists new-cake availability, and refreshes server-derived stock/availability after mutations rather than inventing local stock values. Order and courier mutations now rehydrate the protected order/shipment feeds after persistence so server-normalized state is displayed. Existing admin APIs enforce their seeded permission keys after the admin/owner role check; staff management, login-audit telemetry, exports, and some fallback state remain incomplete.
 
 | Area | Current state |
 | --- | --- |
@@ -108,7 +118,7 @@ The role selector in the page must never be treated as authorization. Server ses
 
 - `prisma/schema.prisma` is the executable schema source and includes Auth.js, catalog, commerce, payment, shipment, inventory, review, wishlist, loyalty, media, notification, contact/newsletter, analytics, and audit models.
 - `prisma/seed.ts` is idempotent for roles, permissions, optional owner, sample catalog/inventory, and `SWEET10`.
-- `prisma/migrations/` exists but contains no migration files.
+- `prisma/migrations/00000000000000_initial/migration.sql` and `migration_lock.toml` now exist as an unapplied baseline generated from the current schema. No database was contacted or changed; review, staging application, and shadow-database verification remain pending.
 - `server-only` is now an explicit dependency; the initial rate-limit test exposed and fixed its missing package contract.
 - `.env.example` documents the current environment contract. Local `.env.local` values must remain private.
 - The root `backend/` directory is not the active backend. Do not add a parallel server without an explicit architecture decision.
@@ -116,7 +126,7 @@ The role selector in the page must never be treated as authorization. Server ses
 
 ## Release blockers
 
-1. Create and review the initial Prisma migration; verify a disposable restore path before production deployment.
+1. Review and apply the generated initial Prisma migration to isolated staging; verify a disposable restore path using [`RELEASE_AND_DATABASE_RUNBOOK.md`](docs/deployment/RELEASE_AND_DATABASE_RUNBOOK.md) before production deployment.
 2. Configure separate staging and production values for Neon, Auth.js, Daraja, WhatsApp, email, media, scheduler, and public URLs.
 3. Approve and implement the remaining admin staff/audit/export workflows; operational views no longer use fabricated API fallback records.
 4. Implement and verify R2 media upload/attachment, email/WhatsApp notification delivery, payment reconciliation/refunds, and job scheduling.
@@ -127,7 +137,7 @@ Baseline security headers/CSP (with development-only `unsafe-eval`), a database-
 
 ## Recommended next sequence
 
-1. Lock business configuration and create the migration baseline.
+1. Lock business configuration, review the generated migration baseline, and apply it to isolated staging.
 2. Finish catalog/media and connect the public/admin catalog flows.
 3. Connect admin orders, delivery, customers, analytics, and inventory screens.
 4. Add notification/payment reconciliation providers and schedule reservation expiry.
@@ -136,17 +146,17 @@ Baseline security headers/CSP (with development-only `unsafe-eval`), a database-
 
 ## Validation notes
 
-The default test script runs with one worker on Windows because parallel test workers intermittently produced `spawn EPERM`; the 23 assertions pass sequentially.
+The default test script runs with one worker on Windows because parallel test workers intermittently produced `spawn EPERM`; the 25 assertions pass sequentially.
 
-The homepage cart, checkout, account, and product overlays now move focus into the active dialog, contain Tab navigation, close on Escape, and restore focus to the triggering control. Broader mobile, screen-reader, image fallback, and browser/device review remains outstanding.
+The homepage cart, checkout, account, and product overlays now move focus into the active dialog, contain Tab navigation, close on Escape, and restore focus to the triggering control. Catalog/product loading and error states now expose status/alert semantics; product thumbnails are removed when external images fail; and catalog cards try remaining images before showing an accessible unavailable-image placeholder. Broader mobile, screen-reader, image-alt, and browser/device review remains outstanding.
 
-Homepage catalog hydration now consumes `/api/cakes` as a paginated `{ items, ... }` response, maps active customization definitions and approved media URLs when available, uses live variant prices for estimates, and restores server-only cakes in cart/wishlist state. The legacy visual cake records remain an explicit offline/unconfigured preview fallback until the approved catalog and media records are seeded.
+Homepage catalog hydration now consumes `/api/cakes` as a paginated `{ items, ... }` response, maps active customization definitions and approved media URLs when available, uses live variant prices for estimates, and restores server-only cakes in cart/wishlist state. Legacy visual cake records remain limited to offline/unconfigured preview and missing hero/promo visuals; they are not included in the live collection listing.
 
 Cart, checkout, account, wishlist, reviews, registration, payment retry, scheduling, catalog, inventory, order, shipment, promotion, contact-message, analytics, customer, newsletter, and admin-review handlers now parse selected bodies and path/query parameters before returning configuration errors or touching database code. Direct production-output checks returned HTTP 400 for malformed review, registration, scheduling, payment-retry, cart, checkout, and email-verification requests; the source audit found no remaining matching public/admin ordering gaps.
 
-A clean production build initially stalled after generating output on Windows. `next.config.js` now disables the Webpack build worker for this environment; the latest bounded `next build frontend` retry completed with exit code 0 in about 164 seconds using process-only local placeholders. The generated output was also served by temporary smoke checks, with no preview listener left running.
+A clean production build initially stalled after generating output on Windows. `next.config.js` now disables the Webpack build worker and supports `NEXT_DIST_DIR`; a shared `.next` verification briefly reproduced a Windows/Turbo output race (`PageNotFoundError` for `/_error` and a missing Turbopack runtime), while the isolated `NEXT_DIST_DIR=.next-build` rerun completed all 35 pages and finalization successfully. The isolated output emitted only existing Webpack cache and Autoprefixer warnings, and its preview smoke returned `/` 200, `/cakes` 200, no-database health 503, malformed catalog 400, with no preview listener left running.
 
-The source-level TypeScript check, focused rate-limit/catalog-query/request-size/origin/promotion/public-form/address/notification-privacy/auth-input tests (23 passing), Prisma generate/validate checks, lint, production build, preview smoke checks, and diff check pass. Protected admin/account APIs redirect or return 401 without a session, while database-dependent public APIs return explicit 503 configuration states without `DATABASE_URL`. A live database, Daraja callback, email delivery, external media upload, and production deployment were not verified by this handoff. `npm install` reported eight audit findings; no automatic audit fix was applied because it may introduce breaking dependency changes.
+The source-level TypeScript check, focused rate-limit/catalog-query/request-size/origin/promotion/public-form/address/notification-privacy/auth-input/admin-cake-input/mpesa-callback/payment-metadata/migration-baseline tests, Prisma schema validation, lint, latest production build, preview smoke checks, and diff check pass. A local placeholder `DATABASE_URL` was used only to validate and generate the unapplied migration; migration-directory consistency could not be checked because Prisma requires a reachable shadow database for that operation. Protected admin/account APIs redirect or return 401 without a session, while database-dependent public APIs return explicit 503 configuration states without `DATABASE_URL`. A live database, Daraja callback delivery, email delivery, external media upload, and production deployment were not verified by this handoff. `npm install` reported eight audit findings; no automatic audit fix was applied because it may introduce breaking dependency changes.
 
 
 ## Key files

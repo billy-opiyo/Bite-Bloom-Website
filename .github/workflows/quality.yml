@@ -1,0 +1,44 @@
+name: Bite & Bloom quality
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXTAUTH_SECRET: ci-only-placeholder-secret
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      NEXT_DIST_DIR: .next-build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: node node_modules/typescript/bin/tsc --noEmit --pretty false -p frontend/tsconfig.json
+
+      - name: ESLint
+        run: node node_modules/next/dist/bin/next lint frontend
+
+      - name: Tests
+        run: npm test -- --test-reporter=spec
+
+      - name: Production build
+        run: node node_modules/next/dist/bin/next build frontend

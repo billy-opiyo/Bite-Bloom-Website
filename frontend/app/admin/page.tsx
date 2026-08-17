@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 
@@ -49,6 +49,33 @@ export default function AdminPage() {
   const [analytics, setAnalytics] = useState<AdminAnalytics | null>(null);
   const [customers, setCustomers] = useState<AdminCustomer[]>([]);
   const [shipments, setShipments] = useState<AdminShipment[]>([]);
+
+  const loadShipments = useCallback(async (): Promise<boolean> => {
+    try {
+      const response = await fetch("/api/admin/shipments", { credentials: "same-origin" });
+      if (!response.ok) return false;
+      const payload = await response.json() as { data?: AdminShipment[] };
+      if (!payload.data) return false;
+      setShipments(payload.data);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const loadOrders = useCallback(async (): Promise<boolean> => {
+    const statusLabel: Record<string, string> = { PENDING_PAYMENT: "Pending", PAID: "Paid", CONFIRMED: "Accepted", PREPARING: "Baking", READY_FOR_DISPATCH: "Decorating", OUT_FOR_DELIVERY: "Out for delivery", DELIVERED: "Delivered", COMPLETED: "Delivered", CANCELLED: "Rejected", FAILED: "Rejected" };
+    try {
+      const response = await fetch("/api/admin/orders", { credentials: "same-origin" });
+      if (!response.ok) return false;
+      const payload = await response.json() as { data?: AdminOrderRecord[] };
+      if (!payload.data) return false;
+      setOrders(payload.data.map((order) => ({ id: order.orderNumber, backendId: order.id, customer: order.customer, cake: order.items.map((item) => `${item.quantity} × ${item.cakeName}${item.variantName ? ` · ${item.variantName}` : ""}`).join(", "), amount: order.total, status: statusLabel[order.status] ?? order.status, time: new Date(order.placedAt).toLocaleString("en-KE"), driver: order.courier ?? "Unassigned", delivery: order.fulfillmentType === "DELIVERY" ? "Delivery" : "Pickup" })));
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
 
   const applyCatalogue = (catalogue: AdminCataloguePayload) => {
     setCatalogueCategories(catalogue.categories);
@@ -121,20 +148,8 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
-    async function loadShipments() {
-      try {
-        const response = await fetch("/api/admin/shipments", { credentials: "same-origin" });
-        if (!response.ok) return;
-        const payload = await response.json() as { data?: AdminShipment[] };
-        if (isMounted && payload.data) setShipments(payload.data);
-      } catch {
-        // The view already renders an explicit unavailable state.
-      }
-    }
     void loadShipments();
-    return () => { isMounted = false; };
-  }, []);
+  }, [loadShipments]);
 
   useEffect(() => {
     let isMounted = true;
@@ -172,22 +187,8 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    const statusLabel: Record<string, string> = { PENDING_PAYMENT: "Pending", PAID: "Paid", CONFIRMED: "Accepted", PREPARING: "Baking", READY_FOR_DISPATCH: "Decorating", OUT_FOR_DELIVERY: "Out for delivery", DELIVERED: "Delivered", COMPLETED: "Delivered", CANCELLED: "Rejected", FAILED: "Rejected" };
-    let isMounted = true;
-    async function loadOrders() {
-      try {
-        const response = await fetch("/api/admin/orders", { credentials: "same-origin" });
-        if (!response.ok) return;
-        const payload = await response.json() as { data?: AdminOrderRecord[] };
-        if (!payload.data || !isMounted) return;
-        setOrders(payload.data.map((order) => ({ id: order.orderNumber, backendId: order.id, customer: order.customer, cake: order.items.map((item) => `${item.quantity} × ${item.cakeName}${item.variantName ? ` · ${item.variantName}` : ""}`).join(", "), amount: order.total, status: statusLabel[order.status] ?? order.status, time: new Date(order.placedAt).toLocaleString("en-KE"), driver: order.courier ?? "Unassigned", delivery: order.fulfillmentType === "DELIVERY" ? "Delivery" : "Pickup" })));
-      } catch {
-        // The view already renders an explicit unavailable state.
-      }
-    }
     void loadOrders();
-    return () => { isMounted = false; };
-  }, []);
+  }, [loadOrders]);
 
   const filteredCakes = cakes.filter((cake) => `${cake.name} ${cake.category}`.toLowerCase().includes(query.toLowerCase()));
   const filteredOrders = orders.filter((order) => orderFilter === "All orders" || order.status === orderFilter);
@@ -216,7 +217,8 @@ export default function AdminPage() {
       const response = await fetch(`/api/admin/orders/${order.backendId}`, { method: "PATCH", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: statuses[value] }) }).catch(() => null);
       if (!response?.ok) { notify("That status change is not allowed yet"); return; }
     }
-    setOrders((items) => items.map((item) => item.id === id ? { ...item, [field]: value } : item));
+    const refreshed = await Promise.all([loadOrders(), loadShipments()]);
+    if (refreshed.some((result) => !result)) { notify(`${id} was saved, but the admin feed could not be refreshed`); return; }
     notify(`${id} updated`);
   };
 

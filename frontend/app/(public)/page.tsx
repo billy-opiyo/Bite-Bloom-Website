@@ -290,7 +290,7 @@ const cakes: Cake[] = [
   },
 ];
 
-const categories = [
+const categoriesFallback = [
   "All cakes",
   "Birthday",
   "Wedding",
@@ -612,15 +612,30 @@ export default function HomePage() {
     return () => controller.abort();
   }, [catalogueCakes]);
 
-  const displayedCakes = useMemo(() => {
+  const catalogueDisplayCakes = useMemo(() => {
     const serverCakes = Object.values(catalogueCakes);
     if (!serverCakes.length) return cakes;
     return serverCakes.map((serverCake, index) => mapServerCake(serverCake, cakes.find((cake) => cake.name === serverCake.name), index));
   }, [catalogueCakes]);
 
+  const displayedCakes = useMemo(() => {
+    if (catalogueDisplayCakes.length >= 4) return catalogueDisplayCakes;
+    const missingVisuals = cakes.filter((cake) => !catalogueDisplayCakes.some((candidate) => candidate.name === cake.name));
+    return [...catalogueDisplayCakes, ...missingVisuals].slice(0, 4);
+  }, [catalogueDisplayCakes]);
+
+  const categories = useMemo(() => {
+    const liveCategories = Array.from(new Set(Object.values(catalogueCakes).flatMap((cake) => cake.categories.map((category) => category.name))));
+    return liveCategories.length ? ["All cakes", ...liveCategories] : ["All cakes", ...categoriesFallback];
+  }, [catalogueCakes]);
+
+  useEffect(() => {
+    if (!categories.includes(activeCategory)) setActiveCategory("All cakes");
+  }, [activeCategory, categories]);
+
   const filteredCakes = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const result = displayedCakes.filter((cake) => {
+    const result = catalogueDisplayCakes.filter((cake) => {
       const matchesCategory = activeCategory === "All cakes" || cake.category === activeCategory;
       const matchesSearch = !query || `${cake.name} ${cake.category} ${cake.tag}`.toLowerCase().includes(query);
       return matchesCategory && matchesSearch;
@@ -632,7 +647,7 @@ export default function HomePage() {
       if (sortBy === "rating") return b.rating - a.rating;
       return b.reviews - a.reviews;
     });
-  }, [activeCategory, displayedCakes, search, sortBy]);
+  }, [activeCategory, catalogueDisplayCakes, search, sortBy]);
 
   const customizationPrice = selectedCake ? getCustomizedPrice(selectedCake, selectedSize, toppings, withCandles, withCard) : 0;
   const cartSubtotal = cartItems.reduce(
@@ -847,11 +862,11 @@ export default function HomePage() {
 
   async function handleContactSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const fields = event.currentTarget.querySelectorAll<HTMLInputElement>("input");
+    const form = new FormData(event.currentTarget);
     const response = await fetch("/api/contact", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: fields[0]?.value, email: fields[1]?.value, message: contactMessage }),
+      body: JSON.stringify({ name: form.get("name"), email: form.get("email"), message: contactMessage }),
     }).catch(() => null);
     const payload = await response?.json().catch(() => null) as { error?: { message?: string } } | null;
     if (!response?.ok) {
@@ -1023,7 +1038,7 @@ export default function HomePage() {
         <section className="delivery-section" id="delivery"><div className="container delivery-grid"><div className="delivery-copy"><p className="eyebrow">Come on over, or stay cosy</p><h2>We bring the good stuff <em>to you.</em></h2><p>We deliver Monday to Saturday across Nairobi, with careful timing and an extra layer of protection for your cake.</p><div className="delivery-detail"><Icon name="pin" size={20} /><span><strong>Where we deliver</strong><small>Kilimani · Lavington · Westlands · Karen · Kileleshwa<br />CBD · Parklands · Runda · Gigiri and nearby areas</small></span></div><div className="delivery-detail"><Icon name="clock" size={20} /><span><strong>When we bake</strong><small>Mon–Sat, 8:00am–6:00pm<br />Same-day collection from our Kilimani studio</small></span></div></div><div className="contact-card glass-card"><span className="contact-script">Let&apos;s make it sweet</span><h3>Have something<br /><em>in mind?</em></h3><p>Tell us what you&apos;re dreaming up. We&apos;ll help you make it real.</p><a href={`mailto:${siteConfig.email}`} className="contact-line"><Icon name="mail" size={17} /> {siteConfig.email}</a><a href={`tel:${siteConfig.phoneHref}`} className="contact-line"><Icon name="phone" size={17} /> {siteConfig.phoneDisplay}</a><a className="whatsapp-contact" href={whatsappLink(whatsappMessage)} target="_blank" rel="noreferrer"><FaWhatsapp aria-hidden="true" /> Chat on WhatsApp</a><a className="button button-dark full-button" href={`mailto:${siteConfig.email}?subject=Custom%20cake%20enquiry`}>Start a conversation <Icon name="send" size={16} /></a></div></div></section>
       </main>
 
-      <section className="support-section" id="contact"><div className="container"><div className="section-heading support-heading"><div><p className="eyebrow">Say hello</p><h2>We&apos;re here for the <em>sweet questions.</em></h2><p className="section-intro">Order help, custom cake ideas, delivery questions or just a little cake chat — we&apos;d love to hear from you.</p></div><span className="support-hours"><strong>Mon–Sat</strong><small>8:00am – 6:00pm</small></span></div><div className="support-grid"><form className="contact-form-card" onSubmit={handleContactSubmit}><div className="form-card-heading"><span className="support-icon"><Icon name="mail" size={19} /></span><div><strong>Send us a note</strong><small>We usually reply within a few hours.</small></div></div><div className="form-row"><label><span>Your name</span><input required placeholder="Amina Otieno" /></label><label><span>Email address</span><input required type="email" placeholder="hello@example.com" /></label></div><label><span>How can we help?</span><textarea required value={contactMessage} onChange={(event) => setContactMessage(event.target.value)} placeholder="Tell us what you&apos;re dreaming up..." /></label><button className="button button-dark" type="submit">Send message <Icon name="send" size={15} /></button><div className="direct-contact"><a href={siteConfig.phoneHref}><Icon name="phone" size={15} /> Call us</a><a href={whatsappLink("Hi Bite & Bloom, I have a question.")} target="_blank" rel="noreferrer"><FaWhatsapp aria-hidden="true" /> WhatsApp</a></div></form><div className="map-card"><div className="map-heading"><div><strong>Our little corner</strong><small>{siteConfig.address}</small></div><a href={siteConfig.mapSearchUrl} target="_blank" rel="noreferrer" aria-label="Open Bite and Bloom location in Google Maps"><Icon name="arrow" size={16} /></a></div><div className="map-frame"><iframe title="Bite and Bloom location map" loading="lazy" src={siteConfig.mapEmbedUrl} /></div><div className="map-address"><Icon name="pin" size={16} /><span><strong>Studio collection</strong><small>{siteConfig.address}</small></span></div></div><div className="faq-card"><div className="form-card-heading"><span className="support-icon"><Icon name="sparkle" size={19} /></span><div><strong>Frequently asked</strong><small>Good things to know before you order.</small></div></div><div className="faq-list">{faqItems.map((faq, index) => <div className={`faq-item ${faqOpen === index ? "open" : ""}`} key={faq.question}><button onClick={() => setFaqOpen(faqOpen === index ? null : index)} aria-expanded={faqOpen === index}>{faq.question}<span>{faqOpen === index ? "−" : "+"}</span></button>{faqOpen === index && <p>{faq.answer}</p>}</div>)}</div><a className="text-link" href={whatsappLink("Hi Bite & Bloom, I have a question.")} target="_blank" rel="noreferrer">Ask us on WhatsApp <span>↗</span></a></div></div></div></section>
+      <section className="support-section" id="contact"><div className="container"><div className="section-heading support-heading"><div><p className="eyebrow">Say hello</p><h2>We&apos;re here for the <em>sweet questions.</em></h2><p className="section-intro">Order help, custom cake ideas, delivery questions or just a little cake chat — we&apos;d love to hear from you.</p></div><span className="support-hours"><strong>Mon–Sat</strong><small>8:00am – 6:00pm</small></span></div><div className="support-grid"><form className="contact-form-card" onSubmit={handleContactSubmit}><div className="form-card-heading"><span className="support-icon"><Icon name="mail" size={19} /></span><div><strong>Send us a note</strong><small>We usually reply within a few hours.</small></div></div><div className="form-row"><label><span>Your name</span><input name="name" required placeholder="Amina Otieno" /></label><label><span>Email address</span><input name="email" required type="email" placeholder="hello@example.com" /></label></div><label><span>How can we help?</span><textarea name="message" required value={contactMessage} onChange={(event) => setContactMessage(event.target.value)} placeholder="Tell us what you&apos;re dreaming up..." /></label><button className="button button-dark" type="submit">Send message <Icon name="send" size={15} /></button><div className="direct-contact"><a href={siteConfig.phoneHref}><Icon name="phone" size={15} /> Call us</a><a href={whatsappLink("Hi Bite & Bloom, I have a question.")} target="_blank" rel="noreferrer"><FaWhatsapp aria-hidden="true" /> WhatsApp</a></div></form><div className="map-card"><div className="map-heading"><div><strong>Our little corner</strong><small>{siteConfig.address}</small></div><a href={siteConfig.mapSearchUrl} target="_blank" rel="noreferrer" aria-label="Open Bite and Bloom location in Google Maps"><Icon name="arrow" size={16} /></a></div><div className="map-frame"><iframe title="Bite and Bloom location map" loading="lazy" src={siteConfig.mapEmbedUrl} /></div><div className="map-address"><Icon name="pin" size={16} /><span><strong>Studio collection</strong><small>{siteConfig.address}</small></span></div></div><div className="faq-card"><div className="form-card-heading"><span className="support-icon"><Icon name="sparkle" size={19} /></span><div><strong>Frequently asked</strong><small>Good things to know before you order.</small></div></div><div className="faq-list">{faqItems.map((faq, index) => <div className={`faq-item ${faqOpen === index ? "open" : ""}`} key={faq.question}><button type="button" onClick={() => setFaqOpen(faqOpen === index ? null : index)} aria-expanded={faqOpen === index}>{faq.question}<span>{faqOpen === index ? "−" : "+"}</span></button>{faqOpen === index && <p>{faq.answer}</p>}</div>)}</div><a className="text-link" href={whatsappLink("Hi Bite & Bloom, I have a question.")} target="_blank" rel="noreferrer">Ask us on WhatsApp <span>↗</span></a></div></div></div></section>
 
       <footer className="site-footer"><div className="container footer-top"><div className="footer-brand"><a href="#top" className="brand"><span className="brand-mark"><Icon name="cake" size={24} /></span><span><strong>BITE <i>&</i> BLOOM</strong><small>CAKE STUDIO</small></span></a><p>A little more joy, one slice at a time.</p><div className="social-links"><a href={siteConfig.social.instagram} aria-label="Instagram" target="_blank" rel="noreferrer"><FaInstagram aria-hidden="true" /></a><a href={siteConfig.social.facebook} aria-label="Facebook" target="_blank" rel="noreferrer"><FaFacebookF aria-hidden="true" /></a><a href={siteConfig.social.tiktok} aria-label="TikTok" target="_blank" rel="noreferrer"><FaTiktok aria-hidden="true" /></a></div></div><div className="footer-column"><strong>Explore</strong><a href="/cakes">Shop cakes</a><a href="#occasions">Occasions</a><a href="#our-story">Our story</a></div><div className="footer-column"><strong>Need to know</strong><a href="#delivery">Delivery areas</a><a href="#contact">FAQs</a><a href="#contact">Contact us</a></div><div className="newsletter"><strong>Get the good stuff</strong><p>Seasonal menus, early drops and a little sweetness in your inbox.</p><form onSubmit={handleNewsletterSubmit}><label className="sr-only" htmlFor="newsletter-email">Email address</label><input id="newsletter-email" name="email" type="email" required placeholder="Your email address" /><button type="submit" aria-label="Subscribe"><Icon name="arrow" size={17} /></button></form></div></div><div className="container footer-bottom"><span>© {new Date().getFullYear()} Bite & Bloom. Made with care in Nairobi.</span><span><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/cookies">Cookies</a> · <a href="/unsubscribe">Unsubscribe</a> · <a href="#top">Back to top ↑</a></span></div></footer>
 

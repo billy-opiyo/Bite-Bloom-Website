@@ -1,22 +1,20 @@
 import { Prisma } from "@prisma/client";
 import { type NextRequest } from "next/server";
 
+import { parseMpesaCallback } from "../../../../../lib/server/mpesa-callback";
 import { getPrismaClient } from "../../../../../lib/server/prisma";
+import { mergePaymentMetadata } from "../../../../../lib/server/payment-metadata";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-type CallbackItem = { Name?: string; Value?: string | number };
-type StkCallback = { MerchantRequestID?: string; CheckoutRequestID?: string; ResultCode?: number; ResultDesc?: string; CallbackMetadata?: { Item?: CallbackItem[] } };
 
 function callbackResponse() {
   return Response.json({ ResultCode: 0, ResultDesc: "Accepted" });
 }
 
 export async function POST(request: NextRequest) {
-  const payload = await request.json().catch(() => null) as { Body?: { stkCallback?: StkCallback } } | null;
-  const callback = payload?.Body?.stkCallback;
-  if (!callback?.CheckoutRequestID || typeof callback.ResultCode !== "number") return callbackResponse();
+  const callback = parseMpesaCallback(await request.json().catch(() => null));
+  if (!callback) return callbackResponse();
 
   try {
     await getPrismaClient().$transaction(async (tx) => {
@@ -26,7 +24,7 @@ export async function POST(request: NextRequest) {
       const receipt = items.find((item) => item.Name === "MpesaReceiptNumber")?.Value;
       const amount = items.find((item) => item.Name === "Amount")?.Value;
       const paidAmount = typeof amount === "number" ? amount : Number(amount);
-      const metadata: Prisma.InputJsonValue = { merchantRequestId: callback.MerchantRequestID ?? null, resultCode: callback.ResultCode, resultDesc: callback.ResultDesc ?? null, receipt: typeof receipt === "string" ? receipt : null, paidAmount: Number.isFinite(paidAmount) ? paidAmount : null };
+      const metadata: Prisma.InputJsonValue = mergePaymentMetadata(payment.metadata, { merchantRequestId: callback.MerchantRequestID ?? null, resultCode: callback.ResultCode, resultDesc: callback.ResultDesc ?? null, receipt: typeof receipt === "string" ? receipt : null, paidAmount: Number.isFinite(paidAmount) ? paidAmount : null });
 
       if (callback.ResultCode === 0 && paidAmount === Number(payment.amount)) {
         await tx.payment.update({ where: { id: payment.id }, data: { status: "PAID", paidAt: new Date(), metadata } });

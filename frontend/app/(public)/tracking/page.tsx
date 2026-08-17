@@ -2,11 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 
 type TrackingData = { orderNumber: string; status: string; fulfillmentType: string; placedAt: string; };
 const steps = ["PENDING_PAYMENT", "CONFIRMED", "PREPARING", "READY_FOR_DISPATCH", "OUT_FOR_DELIVERY", "DELIVERED"];
 
 export default function TrackingPage() {
+  const searchParams = useSearchParams();
+  const initialOrderNumber = searchParams.get("order")?.trim() || "";
+  const initialEmail = searchParams.get("email")?.trim() || "";
   const [orderNumber, setOrderNumber] = useState("");
   const [email, setEmail] = useState("");
   const [order, setOrder] = useState<TrackingData | null>(null);
@@ -18,6 +22,21 @@ export default function TrackingPage() {
     if (!response.ok || !payload.data) { setOrder(null); setMessage(payload.error?.message || "We could not find that order."); return; }
     setOrder(payload.data); setMessage("");
   }
+
+  useEffect(() => {
+    if (!initialOrderNumber || !initialEmail) return;
+    setOrderNumber(initialOrderNumber);
+    setEmail(initialEmail);
+    setMessage("Loading your order…");
+    let active = true;
+    void fetch(`/api/orders/${encodeURIComponent(initialOrderNumber)}?email=${encodeURIComponent(initialEmail)}`).then(async (response) => {
+      const payload = await response.json().catch(() => null) as { data?: TrackingData; error?: { message?: string } } | null;
+      if (!active) return;
+      if (!response.ok || !payload?.data) { setMessage(payload?.error?.message || "We could not find that order."); return; }
+      setOrder(payload.data); setMessage("");
+    }).catch(() => { if (active) setMessage("We could not load that order right now."); });
+    return () => { active = false; };
+  }, [initialEmail, initialOrderNumber]);
 
   useEffect(() => {
     const trackedOrderNumber = order?.orderNumber;

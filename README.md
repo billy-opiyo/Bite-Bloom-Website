@@ -27,7 +27,7 @@ The repository currently contains:
 
 The current implementation still needs production hardening and UI integration in several areas:
 
-- `prisma/migrations/` is empty. Use `db:push` only for local development until a reviewed migration baseline is created; do not treat the current schema as deployed production state.
+- `prisma/migrations/00000000000000_initial/migration.sql` is a generated, unapplied baseline. Review and apply it only against approved isolated staging first; do not treat the current schema as deployed production state.
 - The admin page uses protected APIs for catalog, orders, delivery, customers, analytics, inventory, reviews, and communication; the staff section remains an explicitly unconfigured prototype pending the role-access decision.
 - Product and admin image surfaces use placeholders and explicitly identify media uploads as unavailable; no filename-only upload is presented as saved. Cloudflare R2 upload sessions and verified media attachment are not implemented in the current route tree.
 - M-Pesa requires real Daraja credentials and a public HTTPS callback URL. Resend, WhatsApp Cloud, R2, Turnstile/WAF, monitoring, and scheduled-job hosting are not configured in this repository.
@@ -82,7 +82,11 @@ npm run db:push
 npm run db:seed
 ```
 
-`db:push` is the current development workflow because no migration files have been committed yet. A production release must use a reviewed migration process before deployment.
+`db:push` remains a local-development workflow. The generated baseline must be reviewed, applied to isolated staging, and verified with a disposable restore before production deployment.
+
+The staging, migration, backup, restore, rollback, and incident sequence is documented in [`docs/deployment/RELEASE_AND_DATABASE_RUNBOOK.md`](docs/deployment/RELEASE_AND_DATABASE_RUNBOOK.md).
+
+The placeholder-only quality workflow is [`.github/workflows/quality.yml`](.github/workflows/quality.yml); verify its remote execution and branch protections before relying on it for releases.
 
 Because the Windows repository path contains `&`, the direct Next binary is the most reliable local preview command:
 

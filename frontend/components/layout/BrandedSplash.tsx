@@ -18,11 +18,11 @@ export default function BrandedSplash() {
           window.clearInterval(timer);
           return 100;
         }
-        return Math.min(100, current + 2);
+        return Math.min(100, current + 1);
       });
     }, PROGRESS_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, []);
 
-  return <main className="splash-screen" aria-label={`Loading Bite and Bloom ${progress}%`}><Image className="splash-background" src="/images/bitebloom%20background.png" alt="" fill priority sizes="100vw" /><div className="splash-mark"><Image className="splash-logo" src="/images/Bite%26Bloom%20icon.png" alt="" width={96} height={96} priority /></div><p className="splash-brand" aria-label="BITE AND BLOOM"><span className="splash-word splash-word-bite">BITE</span> <i className="splash-word splash-word-amp">&amp;</i> <span className="splash-word splash-word-bloom">BLOOM</span></p><div className="splash-progress" role="progressbar" aria-valuemin={1} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${progress}%` }} /></div><p className="splash-status">WARMING THE OVEN<span className="splash-dots" aria-hidden="true">{[0, 1, 2].map((dot) => <span className={dot < visibleDots ? "splash-dot splash-dot-visible" : "splash-dot"} key={dot}>.</span>)}</span> <strong>{progress}%</strong></p></main>;
+  return <main className="splash-screen" aria-label={`Loading Bite and Bloom ${progress}%`}><Image className="splash-background" src="/images/bitebloom%20background.png" alt="" fill priority sizes="100vw" /><div className="splash-mark"><Image className="splash-logo" src="/images/Bite%26Bloom%20icon.png" alt="" width={96} height={96} priority /></div><p className="splash-brand" aria-label="BITE AND BLOOM"><span className="splash-word splash-word-bite">BITE</span> <i className="splash-word splash-word-amp">&amp;</i> <span className="splash-word splash-word-bloom">BLOOM</span></p><div className="splash-progress" role="progressbar" aria-valuemin={1} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${progress}%` }} /></div><p className="splash-status" aria-live="polite">WARMING THE OVEN<span className="splash-dots" aria-hidden="true">{[0, 1, 2].map((dot) => <span className={dot < visibleDots ? "splash-dot splash-dot-visible" : "splash-dot"} key={dot}>.</span>)}</span> <strong>{progress}%</strong></p></main>;
 }

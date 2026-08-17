@@ -1,6 +1,6 @@
 # Bite & Bloom — Feature Implementation Plan
 
-**Last reviewed:** 16 August 2026
+**Last reviewed:** 17 August 2026
 **Current milestone:** server-backed MVP foundation and storefront integration
 **Release status:** not launch-ready
 
@@ -36,7 +36,7 @@ This plan reflects the current source tree. A feature is not considered complete
 
 ### Blocked or not started
 
-- The initial migration baseline and production migration/backup/restore procedure.
+- The initial migration baseline is generated locally but still requires review, a target database, application, and production migration/backup/restore procedure.
 - Daraja sandbox/production credentials and public HTTPS callback verification.
 - R2 media upload sessions, completion verification, cleanup, and cake image attachment.
 - Resend and WhatsApp Cloud delivery, notification retries, templates, and provider failure handling.
@@ -51,6 +51,7 @@ This plan reflects the current source tree. A feature is not considered complete
 
 - [x] Route, schema, API, environment, and seed baseline documented.
 - [x] Current implementation and known gaps reconciled in `PROJECT_HANDOFF.md`.
+- [x] Generate an unapplied Prisma baseline from the current schema at `prisma/migrations/00000000000000_initial/migration.sql`; [ ] review and apply it against an approved staging database.
 - [ ] Confirm Nairobi service areas, delivery fees, pickup address/hours, slot capacity, preparation lead times, cancellation/refund rules, and final currency policy.
 - [ ] Confirm production providers, staging/production separation, retention/privacy policy, legal copy, and deployment owner.
 
@@ -60,10 +61,12 @@ This plan reflects the current source tree. A feature is not considered complete
 
 - [x] Reusable cake, cart, checkout, homepage, layout, tracking, legal, and shared state components exist.
 - [x] Responsive theme, navigation, splash/loading, floating public actions, and dynamic footer behavior exist.
+- [x] Pace the branded splash progress from 1–100% across its configured duration and expose the live status to assistive technology.
 - [x] Add homepage dialog focus management: initial focus, Tab containment, Escape close, and focus restoration for cart, checkout, account, and product overlays.
 - [ ] Remove remaining page-local sample data and connect every visible metric/action to a source of truth; the homepage tracking preview control has been replaced with server-refreshed status and a real tracking route.
-- [x] Make homepage catalog hydration consume the paginated `/api/cakes` envelope, active customization definitions, live images/metadata, and server variant prices; the static visual fallback remains only for unconfigured/offline preview mode.
-- [x] Add global reduced-motion handling and visible keyboard focus rings; [ ] complete accessibility review, mobile breakpoints, focus management, and image alt/fallback review.
+- [x] Make homepage catalog hydration consume the paginated `/api/cakes` envelope, active customization definitions, live images/metadata, and server variant prices; static records remain limited to unconfigured/offline preview or missing hero/promo visuals.
+- [x] Derive homepage category filters from live catalog categories and keep static cakes limited to visual hero/promo fallback when a configured catalog has fewer visual items.
+- [x] Add global reduced-motion handling and visible keyboard focus rings; [x] announce catalog/product loading and error states, suppress failed product thumbnails, use named homepage contact fields, and fall back across failed catalog-card images; [ ] complete accessibility review, mobile breakpoints, focus management, and image alt review.
 - [ ] Replace placeholder business copy/contact/social/map values with approved configuration.
 
 ### Phase 2 — Catalog and product experience
@@ -87,8 +90,12 @@ This plan reflects the current source tree. A feature is not considered complete
 - [x] Inventory availability and reservation release/consumption are server-controlled.
 - [x] Add guest-to-account cart merge and live slot availability/validation.
 - [x] Add checkout idempotency, live slot availability, and server slot-capacity validation.
+- [x] Remove synthetic checkout slot availability on live-slot errors; the form now shows an unavailable state until server-derived slots are loaded.
+- [x] Route checkout success to public email-protected tracking and hydrate tracking fields from its query parameters for guest orders.
 - [x] Add safe customer cancellation boundaries for unpaid cancellable orders.
 - [x] Add an authenticated cart “save for later” action that moves the cake into the server-backed wishlist.
+- [x] Bound and structurally parse M-Pesa callback payloads before payment reconciliation; malformed callbacks acknowledge safely without entering the transaction.
+- [x] Preserve payment metadata across initial STK setup, retry locking/failure, and callback reconciliation so provider evidence and attempt history are not silently erased.
 - [ ] Add configured delivery pricing/areas, payment query/reconciliation, refunds, and paid-order provider failure states.
 - [ ] Run staging scenarios for price tampering, invalid variants, coupon limits, duplicate checkout/callbacks, expired reservations, M-Pesa success/failure, COD, and unauthorized order access.
 
@@ -112,6 +119,7 @@ This plan reflects the current source tree. A feature is not considered complete
 **Status: Partial**
 
 - [x] Server order state machine, status history, customer tracking with automatic public-page refresh, admin order updates/notes, shipment records/events, and inventory consumption/release foundations exist.
+- [x] Rehydrate protected admin order and shipment feeds after status or courier mutations so server-normalized state replaces local optimistic drift.
 - [ ] Connect admin order/delivery screens to APIs and add proof of delivery, courier/ETA integration, pickup readiness, cancellation, exports, and refunds.
 - [x] Connect the admin courier field to validated shipment assignment without fabricated driver identities; [ ] add driver identity management and richer dispatch workflows.
 - [x] Add protected admin order detail retrieval and a print-ready receipt route for the existing order action.
@@ -164,9 +172,9 @@ This plan reflects the current source tree. A feature is not considered complete
 
 **Status: Partial**
 
-- [ ] Create migration, staging, CI, deployment, backup, restore, rollback, and incident runbooks.
-- [x] Add focused automated tests for the rate-limit core, catalog query validation, request-size/origin policy, promotion input, public custom-request source validation, account-address validation, and notification recipient redaction.
-- [x] Verify a clean `next build frontend` with process-only local placeholders; disable the Windows Webpack build worker in `next.config.js` to avoid the prior post-generation stall.
+- [x] Create the source-level migration, staging, deployment, backup, restore, rollback, and incident runbook at `docs/deployment/RELEASE_AND_DATABASE_RUNBOOK.md` and add the placeholder-only quality workflow at `.github/workflows/quality.yml`; [ ] verify CI execution and execute the environment runbook against approved environments.
+- [x] Add focused automated tests for the rate-limit core, catalog query validation, request-size/origin policy, promotion input, public custom-request source validation, account-address validation, notification recipient redaction, admin cake input, M-Pesa callback parsing, payment metadata merging, and migration-baseline integrity.
+- [x] Verify a clean isolated `next build frontend` with process-only local placeholders; disable the Windows Webpack build worker and support `NEXT_DIST_DIR=.next-build` so concurrent Turbo development output cannot corrupt production verification.
 - [ ] Expand unit, API, integration, and browser coverage proportional to payment, inventory, auth, and admin risk.
 - [ ] Verify a disposable database restore and a complete staging order from checkout through completion using `docs/STAGING_SMOKE_TEST_CHECKLIST.md`.
 - [ ] Perform mobile/browser smoke tests and record release evidence before production.

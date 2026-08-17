@@ -9,6 +9,7 @@ import { couponDiscount, couponIsActive } from "../../../lib/server/coupons";
 import { CustomizationValidationError, resolvedCustomizationUnitPrice } from "../../../lib/server/customizations";
 import { hasDatabaseConfiguration } from "../../../lib/server/env";
 import { hasMpesaConfiguration, initiateStkPush, normalizeMpesaPhone } from "../../../lib/server/mpesa";
+import { mergePaymentMetadata } from "../../../lib/server/payment-metadata";
 import { getDeliverySlotAvailability } from "../../../lib/server/delivery-slots";
 import { getPrismaClient } from "../../../lib/server/prisma";
 
@@ -152,7 +153,7 @@ export async function POST(request: NextRequest) {
     try {
       const payment = order.payments[0];
       const stkPush = await initiateStkPush({ orderNumber: order.orderNumber, amount: Number(order.total), phone: input.phone, description: `Bite & Bloom ${order.orderNumber}` });
-      await getPrismaClient().payment.update({ where: { id: payment.id }, data: { providerReference: stkPush.checkoutRequestId, metadata: { merchantRequestId: stkPush.merchantRequestId, checkoutRequestId: stkPush.checkoutRequestId } } });
+      await getPrismaClient().payment.update({ where: { id: payment.id }, data: { providerReference: stkPush.checkoutRequestId, metadata: mergePaymentMetadata(payment.metadata, { merchantRequestId: stkPush.merchantRequestId, checkoutRequestId: stkPush.checkoutRequestId }) } });
       return apiSuccess({ orderNumber: order.orderNumber, status: order.status, total: Number(order.total), currency: order.currency, paymentInitiated: true, paymentMethod: "MPESA", paymentMessage: stkPush.customerMessage }, { status: 201 });
     } catch {
       return apiSuccess({ orderNumber: order.orderNumber, status: order.status, total: Number(order.total), currency: order.currency, paymentInitiated: false, paymentMethod: "MPESA", paymentMessage: "Your order is reserved, but the M-Pesa prompt could not be started. Please contact support to complete payment." }, { status: 202 });

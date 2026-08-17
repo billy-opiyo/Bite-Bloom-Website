@@ -7,6 +7,7 @@ import { hasDatabaseConfiguration } from "../../../../../../lib/server/env";
 import { hasMpesaConfiguration, initiateStkPush } from "../../../../../../lib/server/mpesa";
 import { getPrismaClient } from "../../../../../../lib/server/prisma";
 import { enforceRateLimit } from "../../../../../../lib/server/rate-limit";
+import { mergePaymentMetadata } from "../../../../../../lib/server/payment-metadata";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -41,16 +42,16 @@ export async function POST(request: NextRequest, { params }: { params: { orderNu
       if (!order.phone) throw new RetryError(400, "This order does not have a valid M-Pesa phone number.");
       const pendingPayment = order.payments[0];
       if (!pendingPayment || pendingPayment.providerReference) throw new RetryError(409, "An M-Pesa request is already in progress for this order.");
-      const locked = await tx.payment.updateMany({ where: { id: pendingPayment.id, providerReference: null, status: "PENDING" }, data: { providerReference: temporaryReference, metadata: { retryLockedAt: new Date().toISOString() } } });
+      const locked = await tx.payment.updateMany({ where: { id: pendingPayment.id, providerReference: null, status: "PENDING" }, data: { providerReference: temporaryReference, metadata: mergePaymentMetadata(pendingPayment.metadata, { retryLockedAt: new Date().toISOString() }) } });
       if (locked.count !== 1) throw new RetryError(409, "Another payment retry is already in progress.");
-      return { id: pendingPayment.id, orderNumber: order.orderNumber, amount: Number(pendingPayment.amount), phone: order.phone };
+      return { id: pendingPayment.id, orderNumber: order.orderNumber, amount: Number(pendingPayment.amount), phone: order.phone, metadata: pendingPayment.metadata };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     try {
       const stkPush = await initiateStkPush({ orderNumber: payment.orderNumber, amount: payment.amount, phone: payment.phone, description: `Bite & Bloom ${payment.orderNumber}` });
-      await getPrismaClient().payment.update({ where: { id: payment.id }, data: { providerReference: stkPush.checkoutRequestId, metadata: { merchantRequestId: stkPush.merchantRequestId, checkoutRequestId: stkPush.checkoutRequestId, retriedAt: new Date().toISOString() } } });
+      await getPrismaClient().payment.update({ where: { id: payment.id }, data: { providerReference: stkPush.checkoutRequestId, metadata: mergePaymentMetadata(payment.metadata, { merchantRequestId: stkPush.merchantRequestId, checkoutRequestId: stkPush.checkoutRequestId, retriedAt: new Date().toISOString() }) } });
       return apiSuccess({ orderNumber: payment.orderNumber, paymentInitiated: true, paymentMessage: stkPush.customerMessage });
     } catch {
-      await getPrismaClient().payment.updateMany({ where: { id: payment.id, providerReference: temporaryReference }, data: { providerReference: null, metadata: { retryFailedAt: new Date().toISOString() } } });
+      await getPrismaClient().payment.updateMany({ where: { id: payment.id, providerReference: temporaryReference }, data: { providerReference: null, metadata: mergePaymentMetadata(payment.metadata, { retryFailedAt: new Date().toISOString() }) } });
       return apiError("DATABASE_UNAVAILABLE", "The M-Pesa prompt could not be started. Please try again shortly.", 503);
     }
   } catch (error) {
