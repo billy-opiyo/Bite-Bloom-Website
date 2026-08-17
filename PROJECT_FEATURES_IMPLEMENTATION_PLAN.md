@@ -139,6 +139,7 @@ This plan reflects the current source tree. A feature is not considered complete
 - [x] Replace overview, delivery, customer directory, and analytics sample metrics with API-backed, empty-safe screens; cake availability toggles, inventory restock, order status, and review moderation now persist through protected APIs.
 - [x] Make the admin low-stock review control filter the protected inventory feed instead of displaying a no-op notification.
 - [x] Make the admin cake editor use live active categories, persist new-cake availability, and refresh from server-derived stock/availability after catalog mutations instead of fabricating local stock.
+- [x] Keep unavailable catalog cost/margin metrics explicitly marked unavailable instead of rendering fabricated zero values.
 - [x] Connect the admin customer directory's View action to a protected customer detail page with privacy-scoped profile, order, loyalty, payment, and shipment information.
 - [x] Remove fabricated fallback records from catalog/order/inventory/review views when protected APIs are unavailable; [x] remove the simulated admin role switch; [ ] connect staff/login-audit/export workflows and replace remaining prototype staff actions.
 - [x] Add a protected read-only role/permission matrix to the staff view without exposing staff identities or enabling unapproved invitations/role changes.

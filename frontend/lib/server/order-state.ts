@@ -52,5 +52,6 @@ export async function transitionOrder(tx: Prisma.TransactionClient, input: { ord
 
   const updated = await tx.order.update({ where: { id: order.id }, data: { status: input.toStatus, ...(isCashDelivery ? { paymentStatus: "PAID" } : {}) } });
   await tx.orderStatusHistory.create({ data: { orderId: order.id, fromStatus: order.status, toStatus: input.toStatus, changedById: input.actorId, reason: input.reason } });
+  await tx.auditLog.create({ data: { actorId: input.actorId, action: "ORDER_STATUS_CHANGED", entityType: "Order", entityId: order.id, changes: { from: order.status, to: input.toStatus, reason: input.reason ?? null } } });
   return updated;
 }

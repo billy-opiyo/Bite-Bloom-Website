@@ -37,6 +37,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       const status = statusFor(nextQuantity, current.quantityReserved, current.reorderLevel);
       const updated = await tx.inventoryItem.update({ where: { id: current.id }, data: { quantityOnHand: nextQuantity, status } });
       await tx.stockMovement.create({ data: { inventoryItemId: current.id, actorId: session.user.id, type: "ADJUSTMENT", quantityDelta: input.quantityDelta, quantityBefore: current.quantityOnHand, quantityAfter: nextQuantity, reason: input.reason } });
+      await tx.auditLog.create({ data: { actorId: session.user.id, action: "INVENTORY_ADJUSTED", entityType: "InventoryItem", entityId: current.id, changes: { quantityDelta: input.quantityDelta, quantityBefore: current.quantityOnHand, quantityAfter: nextQuantity, reason: input.reason } } });
       return updated;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     return apiSuccess({ id: item.id, quantityOnHand: item.quantityOnHand, quantityReserved: item.quantityReserved, available: item.quantityOnHand - item.quantityReserved, status: item.status });

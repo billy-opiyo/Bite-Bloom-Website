@@ -97,6 +97,7 @@ The public layout includes the branded navigation/footer, responsive actions, th
 - Shipment creation and status updates now persist dispatch/delivery timestamps and return them in the protected feed; proof-of-delivery evidence is intentionally not fabricated and remains gated on the approved workflow/media policy.
 - Shipment mutation handlers now preserve the distinction between invalid workflow transitions and unavailable persistence instead of returning every failure as a validation conflict.
 - The admin inventory alert now toggles a real low-stock-only view over the protected inventory feed; it no longer presents a local toast as if filtering had occurred.
+- The admin catalog table now shows an unavailable marker for margin because cost-of-goods data is not present; it no longer renders a fabricated `0%` margin.
 - The staff view now loads a protected read-only role/permission matrix from seeded records; staff identities, invitations, and role mutations remain intentionally unavailable pending policy approval.
 - Protected date-range analytics returns sales, paid revenue, customer-repeat, daily, and top-cake metrics; the admin overview and analytics screens now render those values when available.
 - Delivery staff assignment, proof of delivery, courier/ETA integration, invoices, refunds, notifications, and analytics aggregation remain incomplete. The admin order screen now exports the current protected order feed as a CSV containing operational fields only; customer/contact exports remain intentionally gated pending an approved privacy workflow.
